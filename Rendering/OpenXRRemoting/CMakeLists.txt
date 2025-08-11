@@ -1,5 +1,5 @@
-vtk_module_find_package(PACKAGE OpenXR VERSION 1.0.31)
-vtk_module_find_package(PACKAGE OpenXRRemoting)
+vtk_module_find_package(PRIVATE_IF_SHARED PACKAGE OpenXR VERSION 1.0.31)
+vtk_module_find_package(PRIVATE_IF_SHARED PACKAGE OpenXRRemoting)
 
 set(classes vtkOpenXRRemotingRenderWindow)
 
