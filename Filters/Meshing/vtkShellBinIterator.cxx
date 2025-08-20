@@ -167,7 +167,6 @@ struct BlockFaceIterator
       this->FaceCenter[0] = blockCenter[0];
       this->FaceCenter[1] = blockCenter[1];
       this->FaceCenter[2] = blockCenter[2] - blockLevel;
-      ;
     }
   }
 

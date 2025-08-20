@@ -513,7 +513,6 @@ int vtkEnSightReader::ReadCaseFileGeometry(char* line)
         this->GeometryTimeSet = timeSet;
         this->SetGeometryFileName(subLine.c_str());
         vtkDebugMacro(<< this->GetGeometryFileName());
-        ;
       }
       else if (auto resultSubLine2 =
                  vtk::scan<std::string_view, std::string>(lineView, " {:s} {:s}"))
