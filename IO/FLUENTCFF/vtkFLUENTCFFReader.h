@@ -35,7 +35,8 @@
 #ifndef vtkFLUENTCFFReader_h
 #define vtkFLUENTCFFReader_h
 
-#include <memory> // std::unique_ptr
+#include <memory>        // std::unique_ptr
+#include <unordered_map> // std::unordered_map
 
 #include "vtkIOFLUENTCFFModule.h" // For export macro
 
@@ -44,6 +45,7 @@
 
 VTK_ABI_NAMESPACE_BEGIN
 class vtkDataArraySelection;
+class vtkMultiBlockDataSet;
 class vtkPoints;
 class vtkTriangle;
 class vtkTetra;
@@ -112,6 +114,44 @@ public:
    */
   void DisableAllCellArrays();
   void EnableAllCellArrays();
+  //@}
+
+  /**
+   * Get the number of face arrays available in the input.
+   */
+  int GetNumberOfFaceArrays();
+
+  /**
+   * Get the name of the face array with the given index in
+   * the input.
+   */
+  const char* GetFaceArrayName(int index);
+
+  //@{
+  /**
+   * Get/Set whether the face array with the given name is to
+   * be read.
+   */
+  int GetFaceArrayStatus(const char* name);
+  void SetFaceArrayStatus(const char* name, int status);
+  //@}
+
+  //@{
+  /**
+   * Turn on/off all face arrays.
+   */
+  void DisableAllFaceArrays();
+  void EnableAllFaceArrays();
+  //@}
+
+  //@{
+  /**
+   * Set/Get if we want to read faces information from the file or not.
+   * False by default.
+   */
+  vtkSetMacro(ReadFaces, bool);
+  vtkGetMacro(ReadFaces, bool);
+  vtkBooleanMacro(ReadFaces, bool);
   //@}
 
   //@{
@@ -312,6 +352,14 @@ private:
   vtkFLUENTCFFReader(const vtkFLUENTCFFReader&) = delete;
   void operator=(const vtkFLUENTCFFReader&) = delete;
 
+  struct FaceZone
+  {
+    std::string name;
+    int minId;
+    int maxId;
+    int zoneType;
+  };
+
   struct DataChunk
   {
     std::string variableName;
@@ -320,15 +368,37 @@ private:
     std::vector<double> dataVector;
   };
 
-  std::vector<DataChunk> DataChunks;
-  std::vector<std::string> PreReadData;
-  int NumberOfArrays = 0;
+  typedef long long hid_t;
+  void ReadFieldMetaData(hid_t parentGroup, int iphase, std::vector<std::string>& container);
 
   /**
    * UDM arrays of N components must be split in N scalar arrays
    */
   void ParseUDMData(
     std::vector<vtkSmartPointer<vtkUnstructuredGrid>>& grid, const DataChunk& vectorDataChunk);
+
+  /**
+   * Create for each Face a block of corresponding cells and fill the output multi block dataset.
+   */
+  void CreateFaces(vtkMultiBlockDataSet* output);
+
+  /**
+   * Fill faceGrid with data arrays based on a given face zone.
+   * Additionally, to reconstruct these data arrays, a map is provided to link a cell with the
+   * associated data in a Zone.
+   */
+  void FillDataArrayForFaceZone(const FaceZone& zone, vtkUnstructuredGrid* faceGrid,
+    const std::unordered_map<unsigned int, vtkIdType>& faceIdToLocalIndex);
+
+  std::vector<DataChunk> DataChunks;
+  std::vector<std::string> PreReadData;
+  std::vector<std::string> PreReadFaceData;
+  int NumberOfArrays = 0;
+
+  std::unordered_map<int, FaceZone> FaceZonesById;
+
+  vtkNew<vtkDataArraySelection> FaceDataArraySelection;
+  bool ReadFaces = false;
 };
 VTK_ABI_NAMESPACE_END
 #endif
