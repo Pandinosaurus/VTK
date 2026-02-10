@@ -16,5 +16,6 @@ vtk_add_test_cxx(vtkIOCGNSReaderCxxTests tests
   TestCGNSUnsteadyTemporalSolution.cxx
   TestCGNSReaderPatchesAsElementNodes.cxx
   TestReadCGNSSolution.cxx
+  TestCGNSReaderLibVersionFree.cxx
   TestCONVERGECFDCGNSReader.cxx)
 vtk_test_cxx_executable(vtkIOCGNSReaderCxxTests tests)
