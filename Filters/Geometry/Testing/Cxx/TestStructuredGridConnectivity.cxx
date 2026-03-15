@@ -697,11 +697,11 @@ int SimpleTest(int argc, char** argv)
   // Doing a void cast here to resolve warnings on unused vars
   static_cast<void>(argc);
   int dim, np, ng, nng;
-  VTK_FROM_CHARS_IF_ERROR_RETURN(argv[1], dim, EXIT_FAILURE) // The dimension of the data
-  VTK_FROM_CHARS_IF_ERROR_RETURN(argv[2], np, EXIT_FAILURE)  // The number of partitions to create
-  VTK_FROM_CHARS_IF_ERROR_RETURN(argv[3], ng, EXIT_FAILURE)  // The number of initial ghost layers
+  VTK_FROM_CHARS_IF_ERROR_RETURN(argv[1], dim, EXIT_FAILURE); // The dimension of the data
+  VTK_FROM_CHARS_IF_ERROR_RETURN(argv[2], np, EXIT_FAILURE);  // The number of partitions to create
+  VTK_FROM_CHARS_IF_ERROR_RETURN(argv[3], ng, EXIT_FAILURE);  // The number of initial ghost layers
   VTK_FROM_CHARS_IF_ERROR_RETURN(
-    argv[4], nng, EXIT_FAILURE) // The number of additional ghost layers
+    argv[4], nng, EXIT_FAILURE); // The number of additional ghost layers
 
   assert("pre: dim must be 2 or 3" && ((dim == 2) || (dim == 3)));
 
