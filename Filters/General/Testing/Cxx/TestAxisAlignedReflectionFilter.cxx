@@ -34,11 +34,14 @@
 #include <iostream>
 
 #define AssertMacro(b, data, reason)                                                               \
-  if (!(b))                                                                                        \
+  do                                                                                               \
   {                                                                                                \
-    std::cerr << "Failed to reflect " << data << ": " << reason << std::endl;                      \
-    return EXIT_FAILURE;                                                                           \
-  }
+    if (!(b))                                                                                      \
+    {                                                                                              \
+      std::cerr << "Failed to reflect " << data << ": " << reason << std::endl;                    \
+      return EXIT_FAILURE;                                                                         \
+    }                                                                                              \
+  } while (0)
 
 #define ReadFileMacro(path, readerClass)                                                           \
   char* fileName = vtkTestUtilities::ExpandDataFileName(argc, argv, path);                         \
@@ -527,9 +530,9 @@ int TestMultiBlockEmptyPiece(int argc, char* argv[])
     Reflect(reader->GetOutputPort(), true, true, vtkAxisAlignedReflectionFilter::X_MIN);
 
   AssertMacro(output->GetNumberOfPartitionedDataSets() == 2, output->GetClassName(),
-    "Incorrect number of partitioned datasets")
+    "Incorrect number of partitioned datasets");
 
-    return EXIT_SUCCESS;
+  return EXIT_SUCCESS;
 }
 
 int TestUnstructuredGridWithGlobalIds(int argc, char* argv[])
