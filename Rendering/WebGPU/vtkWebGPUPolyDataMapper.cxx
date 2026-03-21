@@ -3155,33 +3155,22 @@ void vtkWebGPUPolyDataMapper::ReplaceVertexShaderMainEnd(
 }
 
 //------------------------------------------------------------------------------
-void vtkWebGPUPolyDataMapper::ReplaceFragmentShaderOutputDef(GraphicsPipelineType pipelineType,
-  vtkWebGPURenderer* vtkNotUsed(wgpuRenderer), vtkWebGPUActor* vtkNotUsed(wgpuActor),
-  std::string& fss)
+void vtkWebGPUPolyDataMapper::ReplaceFragmentShaderOutputDef(
+  GraphicsPipelineType vtkNotUsed(pipelineType), vtkWebGPURenderer* vtkNotUsed(wgpuRenderer),
+  vtkWebGPUActor* vtkNotUsed(wgpuActor), std::string& fss)
 {
-  const bool usesFragDepth = pipelineType == GFX_PIPELINE_POINTS_SHAPED ||
-    pipelineType == GFX_PIPELINE_POINTS_SHAPED_HOMOGENEOUS_CELL_SIZE;
-  if (usesFragDepth)
-  {
-    vtkWebGPURenderPipelineCache::Substitute(fss, "//VTK::FragmentOutput::Def",
-      R"(struct FragmentOutput
+  // Always include frag_depth in the output so that coincident topology offset can be applied to
+  // all primitive types (points, lines, polygons). Shaped-point pipelines also use frag_depth for
+  // sphere shading. For all other pipelines, frag_depth is initialized to the rasterized depth and
+  // optionally shifted by the coincident topology offset.
+  vtkWebGPURenderPipelineCache::Substitute(fss, "//VTK::FragmentOutput::Def",
+    R"(struct FragmentOutput
 {
   @builtin(frag_depth) frag_depth: f32,
   @location(0) color: vec4<f32>,
   @location(1) ids: vec4<u32>, // {cell, prop, composite, process}Id
 };)",
-      /*all=*/true);
-  }
-  else
-  {
-    vtkWebGPURenderPipelineCache::Substitute(fss, "//VTK::FragmentOutput::Def",
-      R"(struct FragmentOutput
-{
-  @location(0) color: vec4<f32>,
-  @location(1) ids: vec4<u32>, // {cell, prop, composite, process}Id
-};)",
-      /*all=*/true);
-  }
+    /*all=*/true);
 }
 
 //------------------------------------------------------------------------------
@@ -3192,12 +3181,14 @@ void vtkWebGPUPolyDataMapper::ReplaceFragmentShaderMainStart(GraphicsPipelineTyp
   const std::string basicCode = R"(@fragment
 fn fragmentMain(
   vertex: VertexOutput) -> FragmentOutput {
-  var output: FragmentOutput;)";
+  var output: FragmentOutput;
+  output.frag_depth = vertex.position.z;)";
   const std::string frontFacingCode = R"(@fragment
 fn fragmentMain(
   @builtin(front_facing) is_front_facing: bool,
   vertex: VertexOutput) -> FragmentOutput {
-  var output: FragmentOutput;)";
+  var output: FragmentOutput;
+  output.frag_depth = vertex.position.z;)";
 
   switch (pipelineType)
   {
