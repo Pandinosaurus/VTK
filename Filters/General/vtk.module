@@ -43,8 +43,10 @@ TEST_DEPENDS
   VTK::FiltersHybrid
   VTK::FiltersModeling
   VTK::FiltersSources
+  VTK::FiltersTemporal
   VTK::IOExodus
   VTK::IOGeometry
+  VTK::IOHDF
   VTK::IOImage
   VTK::IOLegacy
   VTK::IOXML
