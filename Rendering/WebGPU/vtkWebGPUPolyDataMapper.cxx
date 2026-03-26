@@ -3540,10 +3540,13 @@ else
     }
     else if(light.positional == 0u)
     {
-      // Directional camera or scene light
+      // Directional camera or scene light.
+      // light.direction_vc points FROM the light source TOWARD the scene (incident direction).
+      // Diffuse needs the direction FROM the surface TO the light, i.e. -light.direction_vc.
+      // Specular reflect() takes the incident ray (light.direction_vc), not its negation.
       let light_dir: vec3<f32> = normalize(light.direction_vc);
-      df = max(dot(normal_VC, light_dir), 0.0);
-      reflect_dir = reflect(-light_dir, normal_VC);
+      df = max(dot(normal_VC, -light_dir), 0.0);
+      reflect_dir = reflect(light_dir, normal_VC);
     }
     else if(light.cone_angle >= 90.0f)
     {
@@ -3557,7 +3560,9 @@ else
       // Spot light
       let lvec: vec3<f32> = normalize(light.position_vc - frag_position_vc);
       let spot_dir: vec3<f32> = normalize(light.direction_vc);
-      let spot_cos: f32 = dot(lvec, spot_dir);
+      // lvec points FROM fragment TO light, but cone check needs direction FROM light TO fragment
+      // aligned with the spot direction. Use -lvec to get direction from light to fragment.
+      let spot_cos: f32 = dot(-lvec, spot_dir);
       let spot_cutoff: f32 = cos(radians(light.cone_angle));
       if(spot_cos > spot_cutoff)
       {
