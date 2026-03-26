@@ -114,13 +114,17 @@ std::size_t vtkWebGPURenderer::WriteLightsBuffer(std::size_t offset /*=0*/)
 
   const vtkTypeUInt32 count = this->LightIDs.size();
   const auto size = vtkWebGPULight::GetCacheSizeBytes();
+  // WGSL SceneLights layout: count (u32, 4 bytes) + implicit padding (12 bytes) +
+  // values array (count * 80 bytes). The 12-byte padding aligns 'values' to 16 bytes
+  // after the 4-byte count. We write exactly this layout.
+  constexpr std::size_t kLightArrayOffset = 16; // offset of values[] in SceneLights
   std::vector<uint8_t> stage;
-  stage.resize(sizeof(vtkTypeUInt32) + count * size);
+  stage.resize(kLightArrayOffset + count * size, 0);
 
   // number of lights.
   const uint8_t* countu8 = reinterpret_cast<const uint8_t*>(&count);
-  std::memcpy(&stage[wroteBytes], countu8, sizeof(vtkTypeUInt32));
-  wroteBytes += sizeof(vtkTypeUInt32);
+  std::memcpy(stage.data(), countu8, sizeof(vtkTypeUInt32));
+  wroteBytes = kLightArrayOffset; // skip count + 12-byte alignment padding
 
   // the lights themselves.
   for (const auto& lightID : this->LightIDs)
@@ -134,8 +138,8 @@ std::size_t vtkWebGPURenderer::WriteLightsBuffer(std::size_t offset /*=0*/)
     wroteBytes += size;
   }
   wgpuConfiguration->WriteBuffer(
-    this->SceneLightsBuffer, offset, stage.data(), wroteBytes, "LightInformation");
-  return wroteBytes;
+    this->SceneLightsBuffer, offset, stage.data(), stage.size(), "LightInformation");
+  return stage.size();
 }
 
 //------------------------------------------------------------------------------
@@ -144,8 +148,8 @@ void vtkWebGPURenderer::CreateBuffers()
   const auto transformSize = vtkWebGPUCamera::GetCacheSizeBytes();
   const auto transformSizePadded = vtkWebGPUConfiguration::Align(transformSize, 32);
 
-  const auto lightSize = sizeof(vtkTypeUInt32) // light count
-    + this->LightIDs.size() * vtkWebGPULight::GetCacheSizeBytes();
+  // Match WriteLightsBuffer: count (4) + padding (12) + N * 80 bytes per light.
+  const auto lightSize = 16 + this->LightIDs.size() * vtkWebGPULight::GetCacheSizeBytes();
   const auto lightSizePadded = vtkWebGPUConfiguration::Align(lightSize, 32);
 
   auto* wgpuRenderWindow = vtkWebGPURenderWindow::SafeDownCast(this->GetRenderWindow());
