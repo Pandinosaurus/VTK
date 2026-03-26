@@ -348,9 +348,7 @@ bool vtkWebGPUActor::CacheActorRenderOptions()
     const int resolveMode = vtkMapper::GetResolveCoincidentTopology();
     if (auto* vtkmap = vtkMapper::SafeDownCast(this->GetMapper()))
     {
-      if (resolveMode == VTK_RESOLVE_POLYGON_OFFSET ||
-        (displayProperty->GetEdgeVisibility() &&
-          displayProperty->GetRepresentation() == VTK_SURFACE))
+      if (resolveMode == VTK_RESOLVE_POLYGON_OFFSET)
       {
         double pgFactor = 0.0, pgUnits = 0.0;
         double lnFactor = 0.0, lnUnits = 0.0;
