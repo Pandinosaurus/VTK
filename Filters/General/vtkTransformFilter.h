@@ -101,6 +101,12 @@ protected:
 private:
   vtkTransformFilter(const vtkTransformFilter&) = delete;
   void operator=(const vtkTransformFilter&) = delete;
+
+  vtkPointSet* SanitizeInput(vtkInformationVector* inInfo);
+  void InitializeOutput(vtkPointSet* input, vtkPointSet* output);
+  void TransformPointData(vtkPointSet* input, vtkPointSet* output);
+  void TransformCellData(vtkPointSet* input, vtkPointSet* output);
+  vtkDataArray* CreateFromArray(vtkDataArray* input);
 };
 
 VTK_ABI_NAMESPACE_END
