@@ -182,7 +182,50 @@ public:
    * @sa RemoveOriginalIds, AddOriginalIds
    */
   void ClearOriginalIds();
+
+  /**
+   * Add attribute in the forward list.
+   */
+  void ForwardAttribute(int attribute);
+
+  /**
+   * Preserve input attribute, i.e. forward the whole input arrays
+   * wihout reorder (original ids are not used).
+   * Default is false.
+   * @see AddOriginalIds, ForwardAttributes
+   */
+  ///@{
+  vtkSetMacro(PreserveAttributes, bool);
+  vtkGetMacro(PreserveAttributes, bool);
+  vtkBooleanMacro(PreserveAttributes, bool);
   ///@}
+
+  /**
+   * Return a default name for original ids.
+   */
+  static std::string GetTemporaryIdsName();
+
+  /**
+   * Add an ids array on underlying PointData and CellData.
+   * This is used by the vtkDataObjectMeshCache to forward
+   * attributes data from a new input to the cached mesh.
+   */
+  static void CreateTemporaryOriginalIdsArrays(vtkDataObject* object);
+
+  /**
+   * Cleanup the temporary array, as we do not want it to exists outside
+   * of this filter.
+   */
+  static void CleanupTemporaryOriginalIds(vtkDataObject* object);
+  ///@}
+
+  /**
+   * Return the mesh MTime for the given dataobject, as used for the Cache.
+   * If object is a vtkDataSet this is equivalent to vtkDataSet::GetMeshMTime()
+   * If object is a composite, return the max of each underlying dataset MeshMTime.
+   * Other types are ignored, a MTime of 0 is used.
+   */
+  static vtkMTimeType GetDataObjectMeshMTime(vtkDataObject* object);
 
   /**
    * Compute and returns the current cache status.
@@ -278,6 +321,7 @@ private:
   vtkMTimeType CachedOriginalMeshTime = 0;
   vtkMTimeType CachedConsumerTime = 0;
   std::map<int, std::string> OriginalIdsName;
+  bool PreserveAttributes = false;
 };
 
 VTK_ABI_NAMESPACE_END
