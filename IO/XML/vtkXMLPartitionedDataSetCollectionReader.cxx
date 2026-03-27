@@ -7,6 +7,7 @@
 #include "vtkCompositeDataPipeline.h"
 #include "vtkCompositeDataSet.h"
 #include "vtkDataAssembly.h"
+#include "vtkDataAssemblyUtilities.h"
 #include "vtkDataSet.h"
 #include "vtkInformation.h"
 #include "vtkInformationVector.h"
@@ -16,6 +17,7 @@
 #include "vtkSmartPointer.h"
 #include "vtkXMLDataElement.h"
 
+#include <algorithm>
 #include <cctype> // for std::isspace
 
 VTK_ABI_NAMESPACE_BEGIN
@@ -52,10 +54,14 @@ vtkSmartPointer<vtkDataAssembly> ReadDataAssembly(
 }
 }
 
+//------------------------------------------------------------------------------
 vtkStandardNewMacro(vtkXMLPartitionedDataSetCollectionReader);
 
 //------------------------------------------------------------------------------
-vtkXMLPartitionedDataSetCollectionReader::vtkXMLPartitionedDataSetCollectionReader() = default;
+vtkXMLPartitionedDataSetCollectionReader::vtkXMLPartitionedDataSetCollectionReader()
+{
+  this->SetSelector("/"); // Default to read everything and maintain backwards compatibility
+}
 
 //------------------------------------------------------------------------------
 vtkXMLPartitionedDataSetCollectionReader::~vtkXMLPartitionedDataSetCollectionReader() = default;
@@ -64,6 +70,24 @@ vtkXMLPartitionedDataSetCollectionReader::~vtkXMLPartitionedDataSetCollectionRea
 void vtkXMLPartitionedDataSetCollectionReader::PrintSelf(ostream& os, vtkIndent indent)
 {
   this->Superclass::PrintSelf(os, indent);
+  os << "Assembly: ";
+  if (this->Assembly)
+  {
+    this->Assembly->PrintSelf(os, indent.GetNextIndent());
+  }
+  else
+  {
+    os << "is nullptr" << std::endl;
+  }
+
+  os << "AssemblyTag: " << this->AssemblyTag << std::endl;
+
+  os << "Selectors:";
+  for (const auto& selector : this->Selectors)
+  {
+    os << "\n" << selector;
+  }
+  os << std::endl;
 }
 
 //------------------------------------------------------------------------------
@@ -78,6 +102,52 @@ int vtkXMLPartitionedDataSetCollectionReader::FillOutputPortInformation(
 const char* vtkXMLPartitionedDataSetCollectionReader::GetDataSetName()
 {
   return "vtkPartitionedDataSetCollection";
+}
+
+//----------------------------------------------------------------------------
+bool vtkXMLPartitionedDataSetCollectionReader::AddSelector(const char* selector)
+{
+  if (selector && this->Selectors.insert(selector).second)
+  {
+    this->Modified();
+    return true;
+  }
+
+  return false;
+}
+
+//----------------------------------------------------------------------------
+void vtkXMLPartitionedDataSetCollectionReader::ClearSelectors()
+{
+  if (!this->Selectors.empty())
+  {
+    this->Selectors.clear();
+    this->Modified();
+  }
+}
+
+//----------------------------------------------------------------------------
+void vtkXMLPartitionedDataSetCollectionReader::SetSelector(const char* selector)
+{
+  this->ClearSelectors();
+  this->AddSelector(selector);
+}
+
+//----------------------------------------------------------------------------
+int vtkXMLPartitionedDataSetCollectionReader::GetNumberOfSelectors() const
+{
+  return static_cast<int>(this->Selectors.size());
+}
+
+//----------------------------------------------------------------------------
+const char* vtkXMLPartitionedDataSetCollectionReader::GetSelector(int index) const
+{
+  if (index >= 0 && index < this->GetNumberOfSelectors())
+  {
+    auto iter = std::next(this->Selectors.begin(), index);
+    return iter->c_str();
+  }
+  return nullptr;
 }
 
 //------------------------------------------------------------------------------
@@ -122,6 +192,26 @@ void vtkXMLPartitionedDataSetCollectionReader::CreateMetaData(vtkXMLDataElement*
       vtkErrorMacro("Syntax error in file.");
       return;
     }
+  }
+
+  std::string assemblyXMLContents;
+  if (auto assembly = pdsc->GetDataAssembly())
+  {
+    assemblyXMLContents = assembly->SerializeToXML(vtkIndent());
+  }
+  else
+  {
+    vtkNew<vtkDataAssembly> hierarchy;
+    vtkDataAssemblyUtilities::GenerateHierarchy(pdsc, hierarchy);
+    assemblyXMLContents = hierarchy->SerializeToXML(vtkIndent());
+  }
+  const std::string existingAssemblyXMLContents = this->Assembly->SerializeToXML(vtkIndent());
+  if (existingAssemblyXMLContents != assemblyXMLContents)
+  {
+    // Assembly has been updated
+    this->Assembly->InitializeFromXML(assemblyXMLContents.c_str());
+    // Update Assembly widget
+    ++this->AssemblyTag;
   }
   this->Metadata = pdsc;
 }
@@ -176,6 +266,14 @@ void vtkXMLPartitionedDataSetCollectionReader::SyncCompositeDataArraySelections(
 }
 
 //------------------------------------------------------------------------------
+bool vtkXMLPartitionedDataSetCollectionReader::IsBlockSelected(unsigned int compositeIndex)
+{
+  return (this->SelectedCompositeIds.size() == 1 && this->SelectedCompositeIds[0] == 0 /*root*/) ||
+    std::find(this->SelectedCompositeIds.begin(), this->SelectedCompositeIds.end(),
+      compositeIndex) != this->SelectedCompositeIds.end();
+}
+
+//------------------------------------------------------------------------------
 bool vtkXMLPartitionedDataSetCollectionReader::CanReadDataObject(vtkDataObject* dataObject)
 {
   return dataObject ? !dataObject->IsA("vtkCompositeDataSet") : true;
@@ -192,6 +290,10 @@ void vtkXMLPartitionedDataSetCollectionReader::ReadComposite(vtkXMLDataElement* 
     return;
   }
 
+  this->SelectedCompositeIds = vtkDataAssemblyUtilities::GetSelectedCompositeIds(
+    { this->Selectors.begin(), this->Selectors.end() }, this->Assembly, pdsc);
+
+  unsigned int compositeIndex = 0;
   for (int cc = 0; cc < element->GetNumberOfNestedElements(); ++cc)
   {
     vtkXMLDataElement* childXML = element->GetNestedElement(cc);
@@ -203,6 +305,7 @@ void vtkXMLPartitionedDataSetCollectionReader::ReadComposite(vtkXMLDataElement* 
     // child is a partitioned dataset
     if (strcmp(tagName, this->GetXMLPartitionsName()) == 0)
     {
+      ++compositeIndex;
       int partitionIndex = 0;
       if (!childXML->GetScalarAttribute(this->GetXMLPartitionIndexName(), partitionIndex))
       {
@@ -210,10 +313,12 @@ void vtkXMLPartitionedDataSetCollectionReader::ReadComposite(vtkXMLDataElement* 
                                     << "' element in XML. Skipping");
         continue;
       }
-      if (!this->IsPartitionRequested(partitionIndex))
+      if (!this->IsBlockSelected(compositeIndex))
       {
+        compositeIndex += childXML->GetNumberOfNestedElements();
         continue;
       }
+      compositeIndex += childXML->GetNumberOfNestedElements();
       if (auto pds = pdsc->GetPartitionedDataSet(cc))
       {
         for (int j = 0; j < childXML->GetNumberOfNestedElements(); ++j)

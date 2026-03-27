@@ -252,6 +252,17 @@ void vtkXMLUniformGridAMRReader::CreateMetaData(vtkXMLDataElement* ePrimary)
     amrMetaData->GetMetaData(level)->Set(
       vtkCompositeDataSet::NAME(), "Level" + vtk::to_string(level));
   }
+  // create a map from composite ids to level
+  this->CompositeIdToLevel.clear();
+  unsigned int compositeIndex = 0;
+  this->CompositeIdToLevel[compositeIndex++] = 0; // root node
+  for (unsigned int level = 0; level < amrMetaData->GetNumberOfLevels(); ++level)
+  {
+    for (unsigned int idx = 0; idx < amrMetaData->GetNumberOfBlocks(level); ++idx)
+    {
+      this->CompositeIdToLevel[compositeIndex++] = level;
+    }
+  }
   this->Metadata = amrMetaData;
 }
 
@@ -288,10 +299,10 @@ int vtkXMLUniformGridAMRReader::RequestDataObject(vtkInformation* vtkNotUsed(req
 }
 
 //------------------------------------------------------------------------------
-bool vtkXMLUniformGridAMRReader::IsPartitionRequested(unsigned int partitionId)
+bool vtkXMLUniformGridAMRReader::IsBlockSelected(unsigned int compositeIndex)
 {
   return this->HasBlockRequests || this->MaximumLevelsToReadByDefault == 0 ||
-    partitionId < this->MaximumLevelsToReadByDefault;
+    this->CompositeIdToLevel[compositeIndex] < this->MaximumLevelsToReadByDefault;
 }
 
 //------------------------------------------------------------------------------

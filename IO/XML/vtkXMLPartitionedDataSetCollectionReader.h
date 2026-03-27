@@ -21,13 +21,58 @@
 #include "vtkIOXMLModule.h" // For export macro
 #include "vtkXMLCompositeDataReader.h"
 
+#include <set>    // For std::set
+#include <vector> // For std::vector
+
 VTK_ABI_NAMESPACE_BEGIN
+class vtkDataAssembly;
+
 class VTKIOXML_EXPORT vtkXMLPartitionedDataSetCollectionReader : public vtkXMLCompositeDataReader
 {
 public:
   static vtkXMLPartitionedDataSetCollectionReader* New();
   vtkTypeMacro(vtkXMLPartitionedDataSetCollectionReader, vtkXMLCompositeDataReader);
   void PrintSelf(ostream& os, vtkIndent indent) override;
+
+  /**
+   * Get the data full data assembly associated with the input
+   */
+  vtkGetNewMacro(Assembly, vtkDataAssembly);
+
+  /**
+   * Whenever the assembly is changed, this tag gets changed. Note, users should
+   * not assume that this is monotonically increasing but instead simply rely on
+   * its value to determine if the assembly may have changed since last time.
+   *
+   * It is set to 0 whenever there's no valid assembly available.
+   */
+  vtkGetMacro(AssemblyTag, int);
+
+  ///@{
+  /**
+   * API to set selectors. Multiple selectors can be added using `AddSelector`.
+   * The order in which selectors are specified is not preserved and has no
+   * impact on the result.
+   *
+   * `AddSelector` returns true if the selector was added, false if the selector
+   * was already specified and hence not added.
+   *
+   * The default is "/" to maintain backwards compatibility
+   *
+   * @sa vtkDataAssembly::SelectNodes
+   */
+  virtual bool AddSelector(const char* selector);
+  virtual void ClearSelectors();
+  virtual void SetSelector(const char* selector);
+  ///@}
+
+  ///@{
+  /**
+   * API to access selectors.
+   */
+  virtual int GetNumberOfSelectors() const;
+  virtual const char* GetSelector(int index) const;
+  ///@}
 
 protected:
   vtkXMLPartitionedDataSetCollectionReader();
@@ -60,9 +105,9 @@ protected:
     const std::string& filePath) override;
 
   /**
-   * Given the partition id, this method tells if the partitioned dataset should be read
+   * Given the composite id, this method tells if the block should be read
    */
-  virtual bool IsPartitionRequested(unsigned int vtkNotUsed(partitionId)) { return true; }
+  virtual bool IsBlockSelected(unsigned int compositeIndex);
 
   /**
    * Given the data object class, return whether it is allowed.
@@ -73,6 +118,11 @@ private:
   vtkXMLPartitionedDataSetCollectionReader(
     const vtkXMLPartitionedDataSetCollectionReader&) = delete;
   void operator=(const vtkXMLPartitionedDataSetCollectionReader&) = delete;
+
+  int AssemblyTag = 0;
+  vtkNew<vtkDataAssembly> Assembly;
+  std::set<std::string> Selectors;
+  std::vector<unsigned int> SelectedCompositeIds;
 };
 
 VTK_ABI_NAMESPACE_END

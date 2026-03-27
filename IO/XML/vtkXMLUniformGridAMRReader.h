@@ -23,6 +23,8 @@
 #include "vtkSmartPointer.h" // needed for vtkSmartPointer.
 #include "vtkXMLPartitionedDataSetCollectionReader.h"
 
+#include <map> // std::map
+
 VTK_ABI_NAMESPACE_BEGIN
 class vtkOverlappingAMR;
 class vtkUniformGridAMR;
@@ -98,9 +100,9 @@ protected:
     vtkInformationVector* outputVector) override;
 
   /**
-   * Given the partition id, this method tells if the partitioned dataset should be read
+   * Given the composite id, this method tells if the block should be read
    */
-  bool IsPartitionRequested(unsigned int partitionId) override;
+  bool IsBlockSelected(unsigned int compositeIndex) override;
 
   /**
    * Given the data object class, return whether it is allowed.
@@ -121,6 +123,16 @@ private:
 
   bool HasBlockRequests = true;
   unsigned int MaximumLevelsToReadByDefault = 0;
+  std::map<unsigned int, unsigned int> CompositeIdToLevel;
+
+  // Hide Selection functionality since, AMR only support levels
+  vtkDataAssembly* GetAssembly() override { return nullptr; }
+  int GetAssemblyTag() override { return 0; }
+  bool AddSelector(const char* vtkNotUsed(selector)) override { return false; }
+  void ClearSelectors() override {}
+  void SetSelector(const char* vtkNotUsed(selector)) override {}
+  int GetNumberOfSelectors() const override { return 0; }
+  const char* GetSelector(int vtkNotUsed(index)) const override { return nullptr; }
 
   char* OutputDataType = nullptr;
   vtkSetStringMacro(OutputDataType);
