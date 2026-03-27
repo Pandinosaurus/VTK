@@ -183,8 +183,8 @@ int vtkPTemporalPathLineFilter::Initialize(
 }
 
 //-----------------------------------------------------------------------------
-int vtkPTemporalPathLineFilter::Execute(
-  vtkInformation* request, vtkInformationVector** inputVector, vtkInformationVector* outputVector)
+int vtkPTemporalPathLineFilter::Execute(vtkInformation* vtkNotUsed(request),
+  vtkInformationVector** inputVector, vtkInformationVector* vtkNotUsed(outputVector))
 {
   vtkInformation* inInfo = inputVector[0]->GetInformationObject(0);
   vtkInformation* selInfo = inputVector[1]->GetInformationObject(0);
