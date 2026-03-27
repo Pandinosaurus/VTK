@@ -3,9 +3,11 @@
 // SPDX-License-Identifier: BSD-3-Clause
 #include "vtkXMLMultiBlockDataReader.h"
 
+#include "vtkCallbackCommand.h"
 #include "vtkCompositeDataPipeline.h"
 #include "vtkCompositeDataSet.h"
-#include "vtkDataArraySelection.h"
+#include "vtkDataAssembly.h"
+#include "vtkDataAssemblyUtilities.h"
 #include "vtkDataSet.h"
 #include "vtkInformation.h"
 #include "vtkInformationVector.h"
@@ -15,10 +17,15 @@
 #include "vtkSmartPointer.h"
 #include "vtkXMLDataElement.h"
 
+#include <algorithm>
+
 VTK_ABI_NAMESPACE_BEGIN
 vtkStandardNewMacro(vtkXMLMultiBlockDataReader);
 //------------------------------------------------------------------------------
-vtkXMLMultiBlockDataReader::vtkXMLMultiBlockDataReader() = default;
+vtkXMLMultiBlockDataReader::vtkXMLMultiBlockDataReader()
+{
+  this->SetSelector("/"); // Default to read everything and maintain backwards compatibility
+}
 
 //------------------------------------------------------------------------------
 vtkXMLMultiBlockDataReader::~vtkXMLMultiBlockDataReader() = default;
@@ -27,6 +34,24 @@ vtkXMLMultiBlockDataReader::~vtkXMLMultiBlockDataReader() = default;
 void vtkXMLMultiBlockDataReader::PrintSelf(ostream& os, vtkIndent indent)
 {
   this->Superclass::PrintSelf(os, indent);
+  os << "Assembly: ";
+  if (this->Assembly)
+  {
+    this->Assembly->PrintSelf(os, indent.GetNextIndent());
+  }
+  else
+  {
+    os << "is nullptr" << std::endl;
+  }
+
+  os << "AssemblyTag: " << this->AssemblyTag << std::endl;
+
+  os << "Selectors:";
+  for (const auto& selector : this->Selectors)
+  {
+    os << "\n" << selector;
+  }
+  os << std::endl;
 }
 
 //------------------------------------------------------------------------------
@@ -81,9 +106,63 @@ void vtkXMLMultiBlockDataReader::ReadVersion0(vtkXMLDataElement* element,
   }
 }
 
+//----------------------------------------------------------------------------
+bool vtkXMLMultiBlockDataReader::AddSelector(const char* selector)
+{
+  if (selector && this->Selectors.insert(selector).second)
+  {
+    this->Modified();
+    return true;
+  }
+
+  return false;
+}
+
+//----------------------------------------------------------------------------
+void vtkXMLMultiBlockDataReader::ClearSelectors()
+{
+  if (!this->Selectors.empty())
+  {
+    this->Selectors.clear();
+    this->Modified();
+  }
+}
+
+//----------------------------------------------------------------------------
+void vtkXMLMultiBlockDataReader::SetSelector(const char* selector)
+{
+  this->ClearSelectors();
+  this->AddSelector(selector);
+}
+
+//----------------------------------------------------------------------------
+int vtkXMLMultiBlockDataReader::GetNumberOfSelectors() const
+{
+  return static_cast<int>(this->Selectors.size());
+}
+
+//----------------------------------------------------------------------------
+const char* vtkXMLMultiBlockDataReader::GetSelector(int index) const
+{
+  if (index >= 0 && index < this->GetNumberOfSelectors())
+  {
+    auto iter = std::next(this->Selectors.begin(), index);
+    return iter->c_str();
+  }
+  return nullptr;
+}
+
 //------------------------------------------------------------------------------
-void vtkXMLMultiBlockDataReader::ReadComposite(vtkXMLDataElement* element,
-  vtkCompositeDataSet* composite, const char* filePath, unsigned int& dataSetIndex)
+bool vtkXMLMultiBlockDataReader::IsBlockSelected(unsigned int compositeIndex)
+{
+  return std::find(this->SelectedCompositeIds.begin(), this->SelectedCompositeIds.end(),
+           compositeIndex) != this->SelectedCompositeIds.end();
+}
+
+//------------------------------------------------------------------------------
+void vtkXMLMultiBlockDataReader::ReadCompositeInternal(vtkXMLDataElement* element,
+  vtkCompositeDataSet* composite, const char* filePath, unsigned int& dataSetIndex,
+  unsigned int& compositeIndex)
 {
   vtkMultiBlockDataSet* mb = vtkMultiBlockDataSet::SafeDownCast(composite);
   vtkMultiPieceDataSet* mp = vtkMultiPieceDataSet::SafeDownCast(composite);
@@ -95,13 +174,7 @@ void vtkXMLMultiBlockDataReader::ReadComposite(vtkXMLDataElement* element,
     }
     return;
   }
-
-  if (this->GetFileMajorVersion() < 1)
-  {
-    // Read legacy file.
-    this->ReadVersion0(element, composite, filePath, dataSetIndex);
-    return;
-  }
+  compositeIndex++;
 
   // count how may piece in total are there when reading a multi-piece.
   // This helps with distribution of the pieces.
@@ -131,8 +204,11 @@ void vtkXMLMultiBlockDataReader::ReadComposite(vtkXMLDataElement* element,
       vtkSmartPointer<vtkDataObject> childDS;
       if (this->ShouldReadDataSet(dataSetIndex, index, numPieces))
       {
-        // Read
-        childDS.TakeReference(this->ReadDataObject(childXML, filePath));
+        if (this->IsBlockSelected(compositeIndex))
+        {
+          // Read
+          childDS.TakeReference(this->ReadDataObject(childXML, filePath));
+        }
       }
       // insert
       if (mb)
@@ -144,12 +220,13 @@ void vtkXMLMultiBlockDataReader::ReadComposite(vtkXMLDataElement* element,
         mp->SetPiece(index, childDS);
       }
       dataSetIndex++;
+      compositeIndex++;
     }
     // Child is a multiblock dataset itself.
     else if (mb && strcmp(tagName, "Block") == 0)
     {
       auto childDS = vtkMultiBlockDataSet::SafeDownCast(mb->GetBlock(cc));
-      this->ReadComposite(childXML, childDS, filePath, dataSetIndex);
+      this->ReadCompositeInternal(childXML, childDS, filePath, dataSetIndex, compositeIndex);
     }
     // Child is a multipiece dataset.
     else if (mb && strcmp(tagName, "Piece") == 0)
@@ -157,7 +234,7 @@ void vtkXMLMultiBlockDataReader::ReadComposite(vtkXMLDataElement* element,
       // child can either be a vtkMultiBlockDataSet or vtkMultiPieceDataSet
       // see in FillMetaData why this can happen
       auto childDS = vtkCompositeDataSet::SafeDownCast(mb->GetBlock(cc));
-      this->ReadComposite(childXML, childDS, filePath, dataSetIndex);
+      this->ReadCompositeInternal(childXML, childDS, filePath, dataSetIndex, compositeIndex);
     }
     else
     {
@@ -165,6 +242,32 @@ void vtkXMLMultiBlockDataReader::ReadComposite(vtkXMLDataElement* element,
       return;
     }
   }
+}
+
+//------------------------------------------------------------------------------
+void vtkXMLMultiBlockDataReader::ReadComposite(vtkXMLDataElement* element,
+  vtkCompositeDataSet* composite, const char* filePath, unsigned int& dataSetIndex)
+{
+  vtkMultiBlockDataSet* mb = vtkMultiBlockDataSet::SafeDownCast(composite);
+  if (!mb)
+  {
+    vtkErrorMacro("Unsupported composite dataset.");
+    return;
+  }
+
+  if (this->GetFileMajorVersion() < 1)
+  {
+    // Read legacy file.
+    this->ReadVersion0(element, composite, filePath, dataSetIndex);
+    return;
+  }
+
+  this->SelectedCompositeIds = vtkDataAssemblyUtilities::GetSelectedCompositeIds(
+    { this->Selectors.begin(), this->Selectors.end() }, this->Assembly, /*data*/ nullptr,
+    /*leaf nodes*/ true);
+
+  unsigned int compositeIndex = 0;
+  this->ReadCompositeInternal(element, composite, filePath, dataSetIndex, compositeIndex);
 }
 
 //------------------------------------------------------------------------------
@@ -306,6 +409,18 @@ void vtkXMLMultiBlockDataReader::CreateMetaData(vtkXMLDataElement* ePrimary)
   }
   this->Metadata = vtkSmartPointer<vtkMultiBlockDataSet>::New();
   this->FillMetaData(this->Metadata, ePrimary);
+
+  vtkNew<vtkDataAssembly> hierarchy;
+  vtkDataAssemblyUtilities::GenerateHierarchy(this->Metadata, hierarchy);
+  const std::string assemblyXMLContents = hierarchy->SerializeToXML(vtkIndent());
+  const std::string existingAssemblyXMLContents = this->Assembly->SerializeToXML(vtkIndent());
+  if (existingAssemblyXMLContents != assemblyXMLContents)
+  {
+    // Assembly has been updated
+    this->Assembly->InitializeFromXML(assemblyXMLContents.c_str());
+    // Update Assembly widget
+    ++this->AssemblyTag;
+  }
 }
 
 //------------------------------------------------------------------------------
