@@ -14,7 +14,7 @@
 #include "vtkCompositeDataPipeline.h"
 #include "vtkContourFilter.h"
 #include "vtkDebugLeaks.h"
-#include "vtkHierarchicalDataExtractLevel.h"
+#include "vtkExtractLevel.h"
 #include "vtkHierarchicalPolyDataMapper.h"
 #include "vtkOutlineCornerFilter.h"
 #include "vtkProperty.h"
@@ -82,7 +82,7 @@ int TestHierarchicalBoxPipeline(int argc, char* argv[])
   ren->AddActor(ocActor);
 
   // cell 2 point and contour
-  vtkHierarchicalDataExtractLevel* el = vtkHierarchicalDataExtractLevel::New();
+  vtkExtractLevel* el = vtkExtractLevel::New();
   el->SetInputConnection(0, reader->GetOutputPort(0));
   el->AddLevel(2);
 
