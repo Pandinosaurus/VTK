@@ -3225,7 +3225,7 @@ int vtkCGNSReader::GetUnstructuredZone(
           for (vtkIdType nf = 0; nf < numCellFaces; ++nf)
           {
             vtkIdType faceId = cellElementsArr[cellElementsIdx[nc] + nf];
-            bool mustReverse = faceId > 0;
+            bool mustReverse = (faceId > 0) == this->InwardNormals;
             faceId = std::abs(faceId);
 
             // The following is needed because when the NGON_n face data does not precede the

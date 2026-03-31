@@ -221,6 +221,17 @@ public:
 
   ///@{
   /**
+   * Polyhedron face normals are oriented inward if faceId is positive.
+   * To be CGNS compliant this option should be false.
+   * Default is true (for backward compatibility)
+   */
+  vtkSetMacro(InwardNormals, bool);
+  vtkGetMacro(InwardNormals, bool);
+  vtkBooleanMacro(InwardNormals, bool);
+  ///@}
+
+  ///@{
+  /**
    * This option is provided for debugging and should not be used for production
    * runs as the output data produced may not be correct. When set to true, the
    * reader will simply read each solution (`FlowSolution_t`) node encountered in
@@ -378,6 +389,7 @@ private:
   bool CacheMesh = false;
   bool CacheConnectivity = false;
   bool Use3DVector = true;
+  bool InwardNormals = true;
   int UnsteadySolutionStartTimestep = 0;
 
   // For internal cgio calls (low level IO)
