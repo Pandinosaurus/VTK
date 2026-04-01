@@ -150,8 +150,7 @@ int TestWithDataArrayIndexing()
 }
 }
 
-int LoopAndTest(vtkIdList* handles, vtkIntArray* da, int numberOfComponents,
-  vtkIndexedImplicitBackend<int>& backend)
+int LoopAndTest(vtkIdList* handles, int numberOfComponents, vtkIndexedImplicitBackend<int>& backend)
 {
   for (int idx = 0; idx < handles->GetNumberOfIds() * numberOfComponents; idx++)
   {
@@ -191,7 +190,7 @@ int TestWithMappingTuples()
 
   vtkIndexedImplicitBackend<int> backend(handles, baseArray, true);
 
-  int res = LoopAndTest(handles, baseArray, 1, backend);
+  int res = LoopAndTest(handles, 1, backend);
 
   vtkNew<vtkIntArray> baseMultiArray;
   baseMultiArray->SetNumberOfComponents(3);
@@ -214,8 +213,7 @@ int TestWithMappingTuples()
   }
 
   vtkIndexedImplicitBackend<int> multiBackend(multiHandles, baseMultiArray, true);
-  return LoopAndTest(multiHandles, baseMultiArray, 3, multiBackend) == EXIT_SUCCESS ? res
-                                                                                    : EXIT_FAILURE;
+  return LoopAndTest(multiHandles, 3, multiBackend) == EXIT_SUCCESS ? res : EXIT_FAILURE;
 }
 
 int TestIndexedImplicitBackend(int, char*[])
