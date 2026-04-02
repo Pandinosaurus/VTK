@@ -25,16 +25,11 @@ int TestSMPScan(int argc, char* argv[])
 {
   // Some default values
   int NVals = 10000;
-  int BatchSize = 1000;
 
   // Process command line arguments
   if (argc > 1)
   {
     NVals = std::stoi(argv[1]);
-    if (argc > 2)
-    {
-      BatchSize = std::stoi(argv[2]);
-    }
   }
 
   // Create an array in which inplace prefix sum will be computed.
@@ -81,15 +76,10 @@ int TestSMPScan(int argc, char* argv[])
   time = timer->GetElapsedTime();
   std::cout << "Time to sequentially sum values: " << time << "\n";
 
-  // Now compute the prefix sum in parallel. Create batches of points
-  // to process.
-  int numBatches = static_cast<vtkIdType>(ceil(static_cast<double>(NVals) / BatchSize));
-  std::cout << "Num batches: " << numBatches << endl;
-
   // Test vtkSMPTools version
   timer->StartTimer();
   vtkIdType* smpPtr = smpCopy->GetPointer(0);
-  vtkIdType smpRet = vtkSMPTools::ExclusiveScan(smpPtr, smpPtr + NVals, (vtkIdType)0, BatchSize);
+  vtkIdType smpRet = vtkSMPTools::ExclusiveScan(smpPtr, smpPtr + NVals, (vtkIdType)0);
   timer->StopTimer();
   time = timer->GetElapsedTime();
 

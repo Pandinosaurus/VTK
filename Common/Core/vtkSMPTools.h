@@ -629,18 +629,17 @@ public:
    * A convenience method for computing the exclusive scan / prefix sum. The
    * scan is performed in-place on the container contents ranging from
    * [begin,end). The initial value of the resulting scan is specified by
-   * init. Data is processed in batches of size batchSize; if the data size is
-   * < 4*batchSize (determined empirically), the scan will be performed
-   * sequentially. Note that ValueType must support the += and operator=
-   * methods. The method returns the N+1 element sum, which is useful for
-   * creating offsets array such as those found in VTK. Note that ValueType
-   * should be a POD type, and can be zero initialized with {} (either
-   * 0-initialized if a built-in type, or default constructed to 0 with
-   * the default constructur).
+   * init. If the input data size is small (i.e., as compared to
+   * vtkSMPTools::Threshold), the scan will be performed sequentially. Note
+   * that ValueType must support the += and operator= methods. The method
+   * returns the N+1 element sum, which is useful for creating offsets array
+   * such as those found in VTK. Note that ValueType should be a POD type,
+   * and can be zero initialized with {} (either 0-initialized if a built-in
+   * type, or default constructed to 0 with the default constructur).
    */
   template <typename RandomAccessIterator, typename ValueType>
   static ValueType ExclusiveScan(
-    RandomAccessIterator begin, RandomAccessIterator end, ValueType init, int batchSize = 10000);
+    RandomAccessIterator begin, RandomAccessIterator end, ValueType init);
 }; // vtkSMPTools
 
 //------------------------------------------------------------------------------
@@ -654,19 +653,18 @@ public:
 // efficiently support in-place scans.
 template <typename RandomAccessIterator, typename ValueType>
 ValueType vtkSMPTools::ExclusiveScan(
-  RandomAccessIterator begin, RandomAccessIterator end, ValueType init, int batchSize)
+  RandomAccessIterator begin, RandomAccessIterator end, ValueType init)
 {
   // Compute the number of elements in the container.
   typename std::iterator_traits<RandomAccessIterator>::difference_type num =
     std::distance(begin, end);
-  typename std::iterator_traits<RandomAccessIterator>::difference_type thresh = 4 * batchSize;
 
   // Capture the last value before it is overwritten. It will be used to compute
   // the return value.
   ValueType retVal = *(end - 1);
 
   // It's best to perform a sequential scan for "smallish" data.
-  if (num < thresh)
+  if (vtkSMPTools::THRESHOLD > num)
   {
     ValueType val, sum = init;
     for (auto iter = begin; iter != end; ++iter)
@@ -685,9 +683,12 @@ ValueType vtkSMPTools::ExclusiveScan(
     // subsequent sequential summation across the resulting batches
     // determines the initial, offset sum for each batch. Finally the second
     // vtkSMPTools::For loop updates the sums across all batches. These
-    // operations are performed in-place.
-    int numBatches = static_cast<int>(std::ceil(static_cast<double>(num) / batchSize));
+    // operations are performed in-place. The number of batches is set to
+    // a small multiple of the number of threads. Empirically, a multiple
+    // of 2-4 times the number of threads works well.
+    int numBatches = 4 * vtkSMPTools::GetEstimatedNumberOfThreads();
     std::vector<ValueType> batchOffsets(numBatches);
+    int batchSize = static_cast<int>(std::ceil(static_cast<double>(num) / numBatches));
 
     // First pass: sum across batches.
     vtkSMPTools::For(0, numBatches,
@@ -707,8 +708,12 @@ ValueType vtkSMPTools::ExclusiveScan(
         batchOffsets[batchId] = sum;
       }); // end lambda
 
-    // Perform a sequential prefix sum across each batch to create the batch
-    // offsets. The initial value of the scan, init, is added in here.
+    // Perform a sequential, in-place prefix sum across each batch to create
+    // the batch offsets. The initial value of the scan, init, is added in
+    // here. TODO: currently GCC does not perform in-place scan correctly
+    // (this is a known bug, fixed in GCC versions 14.3 and 13.4 see
+    // https://gcc.gnu.org/bugzilla/show_bug.cgi?id=108236).  Eventually,
+    // this loop should be replaced with std::exclusive_scan().
     ValueType val, count = init;
     for (int batchNum = 0; batchNum < numBatches; ++batchNum)
     {
