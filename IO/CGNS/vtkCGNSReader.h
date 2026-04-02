@@ -221,14 +221,14 @@ public:
 
   ///@{
   /**
-   * Polyhedron face normals are oriented inward if faceId is positive.
-   * To be CGNS compliant this option should be false.
-   * For backward compatibility or with a corrupted file, it can be set to true.
-   * Default is false
+   * Polyhedron face normals are oriented outward if faceId is positive.
+   * If a file is not CGNS compliant, set this option to true in order to flip
+   * polyhedron face orientation.
+   * Default is false (CGNS standard by default)
    */
-  vtkSetMacro(InwardNormals, bool);
-  vtkGetMacro(InwardNormals, bool);
-  vtkBooleanMacro(InwardNormals, bool);
+  vtkSetMacro(FlipFaceNormals, bool);
+  vtkGetMacro(FlipFaceNormals, bool);
+  vtkBooleanMacro(FlipFaceNormals, bool);
   ///@}
 
   ///@{
@@ -390,7 +390,7 @@ private:
   bool CacheMesh = false;
   bool CacheConnectivity = false;
   bool Use3DVector = true;
-  bool InwardNormals = false;
+  bool FlipFaceNormals = false;
   int UnsteadySolutionStartTimestep = 0;
 
   // For internal cgio calls (low level IO)
