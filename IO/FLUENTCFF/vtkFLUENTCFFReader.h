@@ -154,6 +154,11 @@ public:
   vtkBooleanMacro(ReadFaces, bool);
   //@}
 
+  /**
+   * Overridden to take into account mtimes for vtkDataArraySelection instances.
+   */
+  vtkMTimeType GetMTime() override;
+
   //@{
   //
   //  Structures

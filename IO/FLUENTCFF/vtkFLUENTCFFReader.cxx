@@ -72,6 +72,15 @@ vtkFLUENTCFFReader::vtkFLUENTCFFReader()
 vtkFLUENTCFFReader::~vtkFLUENTCFFReader() = default;
 
 //------------------------------------------------------------------------------
+vtkMTimeType vtkFLUENTCFFReader::GetMTime()
+{
+  vtkMTimeType mtime = this->Superclass::GetMTime();
+  mtime = std::max(mtime, this->CellDataArraySelection->GetMTime());
+  mtime = std::max(mtime, this->FaceDataArraySelection->GetMTime());
+  return mtime;
+}
+
+//------------------------------------------------------------------------------
 int vtkFLUENTCFFReader::RequestData(vtkInformation* vtkNotUsed(request),
   vtkInformationVector** vtkNotUsed(inputVector), vtkInformationVector* outputVector)
 {
