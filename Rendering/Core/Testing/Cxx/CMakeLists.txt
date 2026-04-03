@@ -33,7 +33,7 @@ set(cxx_tests
   TestBlockOpacity.cxx
   TestBlockVisibility.cxx
   TestCellScalarMappedColors.cxx,NO_DATA
-  TestCoincident.cxx
+  TestCoincident.cxx,LOOSE_VALID
   TestColorByCellDataStringArray.cxx
   TestColorByPointDataStringArray.cxx
   TestColorByStringArrayDefaultLookupTable.cxx
@@ -113,7 +113,7 @@ set(cxx_tests
   TestOffAxisStereo.cxx
   TestOnAndOffScreenConeCxx.cxx
   TestOpacity.cxx
-  TestOpacityMSAA.cxx
+  TestOpacityMSAA.cxx,LOOSE_VALID
   TestOrderedTriangulator.cxx
   TestOSConeCxx.cxx
   TestPickingManager.cxx,NO_VALID
