@@ -1970,6 +1970,7 @@ void vtkWebGPUPolyDataMapper::ApplyShaderReplacements(GraphicsPipelineType pipel
   this->ReplaceFragmentShaderEdges(pipelineType, wgpuRenderer, wgpuActor, fss);
   this->ReplaceFragmentShaderLights(pipelineType, wgpuRenderer, wgpuActor, fss);
   this->ReplaceFragmentShaderPicking(pipelineType, wgpuRenderer, wgpuActor, fss);
+  this->ReplaceFragmentShaderCoincidentOffset(pipelineType, wgpuRenderer, wgpuActor, fss);
   this->ReplaceFragmentShaderMainEnd(pipelineType, wgpuRenderer, wgpuActor, fss);
 }
 
@@ -3155,33 +3156,22 @@ void vtkWebGPUPolyDataMapper::ReplaceVertexShaderMainEnd(
 }
 
 //------------------------------------------------------------------------------
-void vtkWebGPUPolyDataMapper::ReplaceFragmentShaderOutputDef(GraphicsPipelineType pipelineType,
-  vtkWebGPURenderer* vtkNotUsed(wgpuRenderer), vtkWebGPUActor* vtkNotUsed(wgpuActor),
-  std::string& fss)
+void vtkWebGPUPolyDataMapper::ReplaceFragmentShaderOutputDef(
+  GraphicsPipelineType vtkNotUsed(pipelineType), vtkWebGPURenderer* vtkNotUsed(wgpuRenderer),
+  vtkWebGPUActor* vtkNotUsed(wgpuActor), std::string& fss)
 {
-  const bool usesFragDepth = pipelineType == GFX_PIPELINE_POINTS_SHAPED ||
-    pipelineType == GFX_PIPELINE_POINTS_SHAPED_HOMOGENEOUS_CELL_SIZE;
-  if (usesFragDepth)
-  {
-    vtkWebGPURenderPipelineCache::Substitute(fss, "//VTK::FragmentOutput::Def",
-      R"(struct FragmentOutput
+  // Always include frag_depth in the output so that coincident topology offset can be applied to
+  // all primitive types (points, lines, polygons). Shaped-point pipelines also use frag_depth for
+  // sphere shading. For all other pipelines, frag_depth is initialized to the rasterized depth and
+  // optionally shifted by the coincident topology offset.
+  vtkWebGPURenderPipelineCache::Substitute(fss, "//VTK::FragmentOutput::Def",
+    R"(struct FragmentOutput
 {
   @builtin(frag_depth) frag_depth: f32,
   @location(0) color: vec4<f32>,
   @location(1) ids: vec4<u32>, // {cell, prop, composite, process}Id
 };)",
-      /*all=*/true);
-  }
-  else
-  {
-    vtkWebGPURenderPipelineCache::Substitute(fss, "//VTK::FragmentOutput::Def",
-      R"(struct FragmentOutput
-{
-  @location(0) color: vec4<f32>,
-  @location(1) ids: vec4<u32>, // {cell, prop, composite, process}Id
-};)",
-      /*all=*/true);
-  }
+    /*all=*/true);
 }
 
 //------------------------------------------------------------------------------
@@ -3192,12 +3182,14 @@ void vtkWebGPUPolyDataMapper::ReplaceFragmentShaderMainStart(GraphicsPipelineTyp
   const std::string basicCode = R"(@fragment
 fn fragmentMain(
   vertex: VertexOutput) -> FragmentOutput {
-  var output: FragmentOutput;)";
+  var output: FragmentOutput;
+  output.frag_depth = vertex.position.z;)";
   const std::string frontFacingCode = R"(@fragment
 fn fragmentMain(
   @builtin(front_facing) is_front_facing: bool,
   vertex: VertexOutput) -> FragmentOutput {
-  var output: FragmentOutput;)";
+  var output: FragmentOutput;
+  output.frag_depth = vertex.position.z;)";
 
   switch (pipelineType)
   {
@@ -3512,48 +3504,87 @@ void vtkWebGPUPolyDataMapper::ReplaceFragmentShaderLights(
   vtkWebGPUActor* vtkNotUsed(wgpuActor), std::string& fss)
 {
   vtkWebGPURenderPipelineCache::Substitute(fss, "//VTK::Lights::Impl",
-    R"(if scene_lights.count == 0u || !isLightingEnabled(actor.render_options.flags_2)
+    R"(
+if scene_lights.count == 0u || !isLightingEnabled(actor.render_options.flags_2)
+{
+  // No lights: ambient + diffuse only
+  output.color = vec4<f32>(
+    actor.color_options.ambient_intensity * ambient_color + actor.color_options.diffuse_intensity * diffuse_color,
+    actor.color_options.opacity * opacity
+  );
+}
+else
+{
+  var total_diffuse: vec3<f32> = vec3<f32>(0.0);
+  var total_specular: vec3<f32> = vec3<f32>(0.0);
+  var total_ambient: vec3<f32> = actor.color_options.ambient_intensity * ambient_color;
+
+  // In view space, the camera is at the origin.
+  let frag_position_vc: vec3<f32> = vertex.position_VC.xyz;
+  let view_dir: vec3<f32> = normalize(-frag_position_vc);
+
+  for(var i: u32 = 0u; i < scene_lights.count; i = i + 1u)
   {
-    // allow post-processing this pixel.
-    output.color = vec4<f32>(
-      actor.color_options.ambient_intensity * ambient_color + actor.color_options.diffuse_intensity * diffuse_color,
-      actor.color_options.opacity * opacity
-    );
-  }
-  else if scene_lights.count == 1u
-  {
-    let light: SceneLight = scene_lights.values[0];
-    if light.positional == 1u
+    let light: SceneLight = scene_lights.values[i];
+    let light_color: vec3<f32> = light.color;
+
+    // Compute diffuse and reflect direction based on light type
+    var df: f32 = 0.0;
+    var reflect_dir: vec3<f32>;
+
+    if(light.light_type == VTK_LIGHT_TYPE_HEADLIGHT)
     {
-      // TODO: positional
-      output.color = vec4<f32>(
-          actor.color_options.ambient_intensity * ambient_color + actor.color_options.diffuse_intensity * diffuse_color,
-          actor.color_options.opacity * opacity
-      );
+      // Headlight: illuminates along the camera view direction (i.e., -z in view space)
+      df = max(0.000001f, normal_VC.z);
+      reflect_dir = reflect(vec3<f32>(0.0, 0.0, -1.0), normal_VC);
+    }
+    else if(light.positional == 0u)
+    {
+      // Directional camera or scene light.
+      // light.direction_vc points FROM the light source TOWARD the scene (incident direction).
+      // Diffuse needs the direction FROM the surface TO the light, i.e. -light.direction_vc.
+      // Specular reflect() takes the incident ray (light.direction_vc), not its negation.
+      let light_dir: vec3<f32> = normalize(light.direction_vc);
+      df = max(dot(normal_VC, -light_dir), 0.0);
+      reflect_dir = reflect(light_dir, normal_VC);
+    }
+    else if(light.cone_angle >= 90.0f)
+    {
+      // Positional (point) light
+      let lvec: vec3<f32> = normalize(light.position_vc - frag_position_vc);
+      df = max(dot(normal_VC, lvec), 0.0);
+      reflect_dir = reflect(-lvec, normal_VC);
     }
     else
     {
-      // headlight
-      let df: f32 = max(0.000001f, normal_VC.z);
-      let sf: f32 = pow(df, actor.color_options.specular_power);
-      diffuse_color = df * diffuse_color * light.color;
-      specular_color = sf * actor.color_options.specular_intensity * actor.color_options.specular_color * light.color;
-      output.color = vec4<f32>(
-          actor.color_options.ambient_intensity * ambient_color + actor.color_options.diffuse_intensity * diffuse_color + specular_color,
-          actor.color_options.opacity * opacity
-      );
+      // Spot light
+      let lvec: vec3<f32> = normalize(light.position_vc - frag_position_vc);
+      let spot_dir: vec3<f32> = normalize(light.direction_vc);
+      // lvec points FROM fragment TO light, but cone check needs direction FROM light TO fragment
+      // aligned with the spot direction. Use -lvec to get direction from light to fragment.
+      let spot_cos: f32 = dot(-lvec, spot_dir);
+      let spot_cutoff: f32 = cos(radians(light.cone_angle));
+      if(spot_cos > spot_cutoff)
+      {
+        df = max(dot(normal_VC, lvec), 0.0) * pow(spot_cos, light.exponent);
+      }
+      reflect_dir = reflect(-lvec, normal_VC);
     }
+
+    // Diffuse contribution
+    total_diffuse += df * diffuse_color * light_color;
+
+    // Specular contribution
+    let sf: f32 = pow(max(dot(view_dir, reflect_dir), 0.0), actor.color_options.specular_power);
+    total_specular += sf * actor.color_options.specular_intensity * actor.color_options.specular_color * light_color;
   }
-  else
-  {
-    // TODO: light kit
-    output.color = vec4<f32>(
-      actor.color_options.ambient_intensity * ambient_color + actor.color_options.diffuse_intensity * diffuse_color,
-      opacity
-    );
-  }
-  // pre-multiply colors
-  output.color = vec4(output.color.rgb, opacity);)",
+
+  output.color = vec4<f32>(
+    total_ambient + actor.color_options.diffuse_intensity * total_diffuse + total_specular,
+    actor.color_options.opacity * opacity
+  );
+}
+)",
     /*all=*/true);
 }
 
@@ -3569,6 +3600,67 @@ void vtkWebGPUPolyDataMapper::ReplaceFragmentShaderPicking(
     output.ids.z = vertex.composite_id + 1;
     output.ids.w = vertex.process_id + 1;)",
     /*all=*/true);
+}
+
+//------------------------------------------------------------------------------
+void vtkWebGPUPolyDataMapper::ReplaceFragmentShaderCoincidentOffset(
+  GraphicsPipelineType pipelineType, vtkWebGPURenderer* vtkNotUsed(wgpuRenderer),
+  vtkWebGPUActor* vtkNotUsed(wgpuActor), std::string& fss)
+{
+  // Select the coincident factor and offset fields from the actor uniform buffer based on the
+  // primitive type handled by this pipeline. The formula mirrors the OpenGL2 implementation:
+  //   frag_depth += c_factor * depth_slope_scale + c_offset / 65000.0
+  // where depth_slope_scale approximates the maximum depth slope (dFdx/dFdy of depth).
+  // When the coincident parameters are zero (resolution is off), this is a no-op.
+  std::string factorExpr;
+  std::string offsetExpr;
+
+  switch (pipelineType)
+  {
+    case GFX_PIPELINE_TRIANGLES:
+    case GFX_PIPELINE_TRIANGLES_HOMOGENEOUS_CELL_SIZE:
+      factorExpr = "actor.render_options.coin_polygon_factor";
+      offsetExpr = "actor.render_options.coin_polygon_offset";
+      break;
+    case GFX_PIPELINE_LINES:
+    case GFX_PIPELINE_LINES_HOMOGENEOUS_CELL_SIZE:
+    case GFX_PIPELINE_LINES_THICK:
+    case GFX_PIPELINE_LINES_THICK_HOMOGENEOUS_CELL_SIZE:
+    case GFX_PIPELINE_LINES_ROUND_CAP_ROUND_JOIN:
+    case GFX_PIPELINE_LINES_ROUND_CAP_ROUND_JOIN_HOMOGENEOUS_CELL_SIZE:
+    case GFX_PIPELINE_LINES_MITER_JOIN:
+    case GFX_PIPELINE_LINES_MITER_JOIN_HOMOGENEOUS_CELL_SIZE:
+      factorExpr = "actor.render_options.coin_line_factor";
+      offsetExpr = "actor.render_options.coin_line_offset";
+      break;
+    case GFX_PIPELINE_POINTS:
+    case GFX_PIPELINE_POINTS_HOMOGENEOUS_CELL_SIZE:
+    case GFX_PIPELINE_POINTS_SHAPED:
+    case GFX_PIPELINE_POINTS_SHAPED_HOMOGENEOUS_CELL_SIZE:
+      // Points have no slope-dependent factor, only a fixed offset.
+      factorExpr = "0.0";
+      offsetExpr = "actor.render_options.coin_point_offset";
+      break;
+    default:
+      return;
+  }
+
+  // Inject the coincident offset computation before //VTK::FragmentMain::End, which will be
+  // replaced by ReplaceFragmentShaderMainEnd with the return statement. We keep the placeholder
+  // so that ReplaceFragmentShaderMainEnd can still find and replace it.
+  const std::string code = "  {\n"
+                           "    let c_factor: f32 = " +
+    factorExpr +
+    ";\n"
+    "    let c_offset: f32 = " +
+    offsetExpr +
+    ";\n"
+    "    let cscale: f32 = length(vec2<f32>(dpdx(output.frag_depth), dpdy(output.frag_depth)));\n"
+    "    output.frag_depth = output.frag_depth + c_factor * cscale + c_offset / 65000.0;\n"
+    "  }\n"
+    "//VTK::FragmentMain::End";
+
+  vtkWebGPURenderPipelineCache::Substitute(fss, "//VTK::FragmentMain::End", code, /*all=*/true);
 }
 
 //------------------------------------------------------------------------------
