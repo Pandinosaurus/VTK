@@ -21,7 +21,7 @@ struct SMPScanRandomValues
   vtkIdType Next() { return this->Dist(RNG); }
 };
 
-int TestSMPScan(int argc, char* argv[])
+int TestSMPScan(int, char*[])
 {
   // Some default values
   int NVals = 20000;
