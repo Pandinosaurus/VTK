@@ -471,7 +471,16 @@ void vtkWebGPURenderWindow::ConfigureSurface()
     config.device = this->GetDevice();
     config.width = this->Size[0];
     config.height = this->Size[1];
-    config.presentMode = wgpu::PresentMode::Fifo;
+    config.presentMode =
+      wgpu::PresentMode::Fifo; // fallback. this stalls GetCurrentTexture to VSync interval
+    for (std::size_t i = 0; i < capabilities.presentModeCount; ++i)
+    {
+      if (capabilities.presentModes[i] == wgpu::PresentMode::Mailbox)
+      {
+        config.presentMode = wgpu::PresentMode::Mailbox;
+        break;
+      }
+    }
     for (std::size_t i = 0; i < capabilities.formatCount; ++i)
     {
       config.format = capabilities.formats[i];
@@ -1103,98 +1112,64 @@ void vtkWebGPURenderWindow::RenderOffscreenTexture()
     vtkErrorMacro(<< "Cannot render offscreen texture because surface is null!");
     return;
   }
-  // prepare the offscreen texture for presentation.
   wgpu::SurfaceTexture surfaceTexture;
   this->Surface.GetCurrentTexture(&surfaceTexture);
-  switch (surfaceTexture.status)
-  {
-    case wgpu::SurfaceGetCurrentTextureStatus::Timeout:
-      vtkErrorMacro(
-        << "Cannot render offscreen texture because SurfaceGetCurrentTextureStatus=Timeout");
-      return;
-    case wgpu::SurfaceGetCurrentTextureStatus::Outdated:
-      vtkErrorMacro(
-        << "Cannot render offscreen texture because SurfaceGetCurrentTextureStatus=Outdated");
-      return;
-    case wgpu::SurfaceGetCurrentTextureStatus::Lost:
-      vtkErrorMacro(
-        << "Cannot render offscreen texture because SurfaceGetCurrentTextureStatus=Lost");
-      return;
-    case wgpu::SurfaceGetCurrentTextureStatus::Error:
-      vtkErrorMacro(
-        << "Cannot render offscreen texture because SurfaceGetCurrentTextureStatus=Error");
-      return;
-    case wgpu::SurfaceGetCurrentTextureStatus::SuccessSuboptimal:
-      // TODO: Warn exactly once per Initialize/Finalize duration.
-      vtkDebugMacro(<< "SurfaceTexture format is suboptimal!");
-      break;
-    case wgpu::SurfaceGetCurrentTextureStatus::SuccessOptimal:
-    default:
-      break;
-  }
+
+  // Early exit if surface did not give a texture
   if (surfaceTexture.texture == nullptr)
   {
-    vtkErrorMacro(<< "Cannot render offscreen texture because SurfaceTexture is null!");
-    return;
+    switch (surfaceTexture.status)
+    {
+      case wgpu::SurfaceGetCurrentTextureStatus::Timeout:
+      case wgpu::SurfaceGetCurrentTextureStatus::Outdated:
+      case wgpu::SurfaceGetCurrentTextureStatus::Lost:
+      case wgpu::SurfaceGetCurrentTextureStatus::Error:
+        vtkErrorMacro(<< "Cannot render offscreen texture because SurfaceGetCurrentTextureStatus="
+                      << static_cast<int>(surfaceTexture.status));
+        return;
+      case wgpu::SurfaceGetCurrentTextureStatus::SuccessSuboptimal:
+      {
+        static bool warnOnce = false;
+        if (!warnOnce)
+        {
+          vtkWarningMacro(<< "Surface texture format is suboptimal!");
+          warnOnce = true;
+        }
+        break;
+      }
+      default:
+        break;
+    }
   }
-  if (this->ColorAttachment.Texture == nullptr)
+
+  if (this->ColorAttachment.Texture == nullptr || this->ColorCopyRenderPipeline.Key.empty() ||
+    this->ColorCopyRenderPipeline.BindGroup == nullptr || this->CommandEncoder == nullptr)
   {
-    vtkErrorMacro(<< "Cannot render offscreen texture because the source color attachment "
-                     "texture is null!");
-    return;
-  }
-  if (this->ColorCopyRenderPipeline.Key.empty())
-  {
-    vtkErrorMacro(<< "Cannot render offscreen texture because the full-screen-quad render "
-                     "pipeline is not ready!");
-    return;
-  }
-  if (this->ColorCopyRenderPipeline.BindGroup == nullptr)
-  {
-    vtkErrorMacro(<< "Cannot render offscreen texture because the full-screen-quad render bind "
-                     "group is null!");
-    return;
-  }
-  if (this->CommandEncoder == nullptr)
-  {
-    vtkErrorMacro(<< "Cannot render offscreen texture because the command encoder is null!");
+    vtkErrorMacro(<< "Cannot render offscreen texture: missing required resources");
     return;
   }
 
-  vtkWebGPURenderPassDescriptorInternals renderPassDescriptor(
-    { surfaceTexture.texture.CreateView() });
+  wgpu::TextureView surfaceView = surfaceTexture.texture.CreateView();
+  vtkWebGPURenderPassDescriptorInternals renderPassDescriptor({ surfaceView });
   renderPassDescriptor.label = "Render offscreen texture";
+  renderPassDescriptor.ColorAttachments[0].clearValue = { 0.0f, 0.0f, 0.0f, 1.0f };
 
-  for (auto& colorAttachment : renderPassDescriptor.ColorAttachments)
-  {
-    colorAttachment.clearValue.r = 0.0;
-    colorAttachment.clearValue.g = 0.0;
-    colorAttachment.clearValue.b = 0.0;
-    colorAttachment.clearValue.a = 1.0f;
-  }
   if (auto encoder = this->NewRenderPass(renderPassDescriptor))
   {
-    encoder.SetLabel("Encode offscreen texture render commands");
     encoder.SetViewport(
-      0, 0, this->SurfaceConfiguredSize[0], this->SurfaceConfiguredSize[1], 0.0, 1.0);
+      0, 0, this->SurfaceConfiguredSize[0], this->SurfaceConfiguredSize[1], 0.0f, 1.0f);
     encoder.SetScissorRect(0, 0, this->SurfaceConfiguredSize[0], this->SurfaceConfiguredSize[1]);
-    // set fsq pipeline
-    {
-      vtkScopedEncoderDebugGroup(encoder, "FSQ Render");
-      const auto pipeline =
-        this->WGPUPipelineCache->GetRenderPipeline(this->ColorCopyRenderPipeline.Key);
-      encoder.SetPipeline(pipeline);
-      // bind fsq group
-      encoder.SetBindGroup(0, this->ColorCopyRenderPipeline.BindGroup);
-      // draw triangle strip
-      encoder.Draw(4);
-    }
+
+    const auto pipeline =
+      this->WGPUPipelineCache->GetRenderPipeline(this->ColorCopyRenderPipeline.Key);
+    encoder.SetPipeline(pipeline);
+    encoder.SetBindGroup(0, this->ColorCopyRenderPipeline.BindGroup);
+    encoder.Draw(4);
     encoder.End();
   }
   else
   {
-    vtkErrorMacro(<< "Cannot render swapchain contents into offscreen texture because this render "
-                     "window failed to build a new render pass!");
+    vtkErrorMacro(<< "Failed to create render pass for offscreen texture");
     return;
   }
 }
