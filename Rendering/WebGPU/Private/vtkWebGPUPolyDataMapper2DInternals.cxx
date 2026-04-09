@@ -694,6 +694,18 @@ void vtkWebGPUPolyDataMapper2DInternals::ReplaceFragmentShaderFragmentMainEnd(st
 void vtkWebGPUPolyDataMapper2DInternals::ReleaseGraphicsResources(vtkWindow* w)
 {
   this->CellConverter->ReleaseGraphicsResources(w);
+  this->Mapper2DStateData = {};
+  this->AttributeDescriptorData = {};
+  this->MeshData = {};
+  for (int i = 0; i < vtkWebGPUCellToPrimitiveConverter::NUM_TOPOLOGY_SOURCE_TYPES; ++i)
+  {
+    this->TopologyBindGroupInfos[i] = {};
+  }
+  // invalidate bundles from all renderers that used this mapper.
+  for (auto& wgpuRenderer : this->Renderers)
+  {
+    wgpuRenderer->InvalidateBundle();
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -745,6 +757,11 @@ void vtkWebGPUPolyDataMapper2DInternals::UpdateBuffers(
     vtkErrorWithObjectMacro(
       mapper, << "vtkWebGPUPolyDataMapper2DInternals::UpdateBuffers: no vtkWebGPUTextureCache");
     return;
+  }
+
+  if (!this->Renderers.count(wgpuRenderer))
+  {
+    this->Renderers.insert(wgpuRenderer);
   }
 
   bool recreateMeshBindGroup = false;
