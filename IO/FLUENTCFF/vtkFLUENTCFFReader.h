@@ -35,8 +35,8 @@
 #ifndef vtkFLUENTCFFReader_h
 #define vtkFLUENTCFFReader_h
 
-#include <memory>        // std::unique_ptr
-#include <unordered_map> // std::unordered_map
+#include <map>    // std::map
+#include <memory> // std::unique_ptr
 
 #include "vtkIOFLUENTCFFModule.h" // For export macro
 
@@ -393,14 +393,14 @@ private:
    * associated data in a Zone.
    */
   void FillDataArrayForFaceZone(const FaceZone& zone, vtkUnstructuredGrid* faceGrid,
-    const std::unordered_map<unsigned int, vtkIdType>& faceIdToLocalIndex);
+    const std::map<unsigned int, vtkIdType>& faceIdToLocalIndex);
 
   std::vector<DataChunk> DataChunks;
   std::vector<std::string> PreReadData;
   std::vector<std::string> PreReadFaceData;
   int NumberOfArrays = 0;
 
-  std::unordered_map<int, FaceZone> FaceZonesById;
+  std::map<int, FaceZone> FaceZonesById;
 
   vtkNew<vtkDataArraySelection> FaceDataArraySelection;
   bool ReadFaces = false;

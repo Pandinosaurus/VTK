@@ -1083,7 +1083,7 @@ void vtkFLUENTCFFReader::GetFaces()
     v_str.push_back(token);
     str.erase(0, pos + 1);
   }
-  if (str.empty())
+  if (!str.empty())
   {
     v_str.push_back(str);
   }
@@ -2701,7 +2701,7 @@ void vtkFLUENTCFFReader::CreateFaces(vtkMultiBlockDataSet* output)
 
   // We store it here because we need to retrieve each cell by index per zone later when creating
   // each data array Map: ZoneID -> Vector of {GlobalID, NodeList}
-  std::unordered_map<int, std::vector<std::pair<unsigned int, std::vector<vtkIdType>>>> zoneCells;
+  std::map<int, std::vector<std::pair<unsigned int, std::vector<vtkIdType>>>> zoneCells;
   unsigned int globalFaceId = 1;
   for (const auto& face : this->Faces)
   {
@@ -2714,33 +2714,67 @@ void vtkFLUENTCFFReader::CreateFaces(vtkMultiBlockDataSet* output)
   for (auto& [zoneId, facesData] : zoneCells)
   {
     vtkSmartPointer<vtkUnstructuredGrid> faceGrid = vtkSmartPointer<vtkUnstructuredGrid>::New();
-    faceGrid->SetPoints(this->Points);
 
+    vtkNew<vtkPoints> localPoints;
     vtkNew<vtkCellArray> cells;
-    std::unordered_map<unsigned int, vtkIdType> faceIdToLocalIndex;
-    // When creating each face as vtk cell, we need to keep the local vtk cell index
-    vtkIdType localIndex = 0;
-    for (const auto& [faceId, nodes] : facesData)
+
+    // Map to keep track of which global points have been added to this local block
+    std::map<vtkIdType, vtkIdType> globalToLocalPointMap;
+    std::map<unsigned int, vtkIdType> faceIdToLocalIndex;
+
+    vtkIdType localCellIndex = 0;
+
+    for (const auto& [faceId, globalNodes] : facesData)
     {
-      if (nodes.empty())
+      if (globalNodes.empty())
       {
         continue;
       }
 
-      cells->InsertNextCell(static_cast<vtkIdType>(nodes.size()), nodes.data());
+      std::vector<vtkIdType> localNodes;
+      localNodes.reserve(globalNodes.size());
 
-      faceIdToLocalIndex[faceId] = localIndex;
-      localIndex++;
+      // Convert global point IDs to local point IDs
+      for (vtkIdType globalPtId : globalNodes)
+      {
+        auto it = globalToLocalPointMap.find(globalPtId);
+        if (it == globalToLocalPointMap.end())
+        {
+          // This point hasn't been added to this block yet. Grab it from the global points.
+          double pt[3];
+          this->Points->GetPoint(globalPtId, pt);
+
+          // Insert it into local points and record the new local ID
+          vtkIdType localPtId = localPoints->InsertNextPoint(pt);
+          globalToLocalPointMap[globalPtId] = localPtId;
+          localNodes.push_back(localPtId);
+        }
+        else
+        {
+          // We already added this point to the local block, just use its local ID
+          localNodes.push_back(it->second);
+        }
+      }
+
+      // Insert the cell using the LOCAL point IDs
+      cells->InsertNextCell(static_cast<vtkIdType>(localNodes.size()), localNodes.data());
+
+      faceIdToLocalIndex[faceId] = localCellIndex;
+      localCellIndex++;
     }
 
+    // Now, assign the LOCAL points to the grid, not this->Points!
+    faceGrid->SetPoints(localPoints);
     faceGrid->SetCells(VTK_POLYGON, cells);
+    output->SetBlock(currentBlock, faceGrid);
+
+    // 2. Now apply data arrays and renaming
     if (this->FaceZonesById.find(zoneId) != this->FaceZonesById.end())
     {
       this->FillDataArrayForFaceZone(this->FaceZonesById[zoneId], faceGrid, faceIdToLocalIndex);
 
-      output->SetBlock(currentBlock, faceGrid);
-
-      vtkSmartPointer<vtkInformation> meta = output->GetMetaData(currentBlock);
+      // 3. Get the metadata (which is now guaranteed to exist) and set the name
+      vtkInformation* meta = output->GetMetaData(currentBlock);
       if (meta)
       {
         std::string name = this->FaceZonesById[zoneId].name;
@@ -2748,20 +2782,17 @@ void vtkFLUENTCFFReader::CreateFaces(vtkMultiBlockDataSet* output)
         {
           name = "FaceZone_" + vtk::to_string(zoneId);
         }
-
         meta->Set(vtkCompositeDataSet::NAME(), name.c_str());
       }
     }
 
-    output->SetBlock(currentBlock, faceGrid);
     currentBlock++;
   }
 }
 
 //------------------------------------------------------------------------------
 void vtkFLUENTCFFReader::FillDataArrayForFaceZone(const FaceZone& zone,
-  vtkUnstructuredGrid* faceGrid,
-  const std::unordered_map<unsigned int, vtkIdType>& faceIdToLocalIndex)
+  vtkUnstructuredGrid* faceGrid, const std::map<unsigned int, vtkIdType>& faceIdToLocalIndex)
 {
   if (!faceGrid)
   {
