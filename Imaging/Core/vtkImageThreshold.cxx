@@ -9,6 +9,7 @@
 #include "vtkImageProgressIterator.h"
 #include "vtkInformation.h"
 #include "vtkInformationVector.h"
+#include "vtkMathUtilities.h"
 #include "vtkObjectFactory.h"
 #include "vtkStreamingDemandDrivenPipeline.h"
 
@@ -122,77 +123,17 @@ void vtkImageThresholdExecute(vtkImageThreshold* self, vtkImageData* inData, vtk
 {
   vtkImageIterator<IT> inIt(inData, outExt);
   vtkImageProgressIterator<OT> outIt(outData, outExt, self, id);
-  IT lowerThreshold;
-  IT upperThreshold;
   int replaceIn = self->GetReplaceIn();
-  OT inValue;
   int replaceOut = self->GetReplaceOut();
-  OT outValue;
   IT temp;
 
   // Make sure the thresholds are valid for the input scalar range
-  if (self->GetLowerThreshold() < inData->GetScalarTypeMin())
-  {
-    lowerThreshold = static_cast<IT>(inData->GetScalarTypeMin());
-  }
-  else
-  {
-    if (self->GetLowerThreshold() > inData->GetScalarTypeMax())
-    {
-      lowerThreshold = static_cast<IT>(inData->GetScalarTypeMax());
-    }
-    else
-    {
-      lowerThreshold = static_cast<IT>(self->GetLowerThreshold());
-    }
-  }
-  if (self->GetUpperThreshold() > inData->GetScalarTypeMax())
-  {
-    upperThreshold = static_cast<IT>(inData->GetScalarTypeMax());
-  }
-  else
-  {
-    if (self->GetUpperThreshold() < inData->GetScalarTypeMin())
-    {
-      upperThreshold = static_cast<IT>(inData->GetScalarTypeMin());
-    }
-    else
-    {
-      upperThreshold = static_cast<IT>(self->GetUpperThreshold());
-    }
-  }
+  IT lowerThreshold = vtkMathUtilities::SafeCastFromDouble<IT>(self->GetLowerThreshold());
+  IT upperThreshold = vtkMathUtilities::SafeCastFromDouble<IT>(self->GetUpperThreshold());
 
   // Make sure the replacement values are within the output scalar range
-  if (self->GetInValue() < outData->GetScalarTypeMin())
-  {
-    inValue = static_cast<OT>(outData->GetScalarTypeMin());
-  }
-  else
-  {
-    if (self->GetInValue() > outData->GetScalarTypeMax())
-    {
-      inValue = static_cast<OT>(outData->GetScalarTypeMax());
-    }
-    else
-    {
-      inValue = static_cast<OT>(self->GetInValue());
-    }
-  }
-  if (self->GetOutValue() > outData->GetScalarTypeMax())
-  {
-    outValue = static_cast<OT>(outData->GetScalarTypeMax());
-  }
-  else
-  {
-    if (self->GetOutValue() < outData->GetScalarTypeMin())
-    {
-      outValue = static_cast<OT>(outData->GetScalarTypeMin());
-    }
-    else
-    {
-      outValue = static_cast<OT>(self->GetOutValue());
-    }
-  }
+  OT inValue = vtkMathUtilities::SafeCastFromDouble<OT>(self->GetInValue());
+  OT outValue = vtkMathUtilities::SafeCastFromDouble<OT>(self->GetOutValue());
 
   // Loop through output pixels
   while (!outIt.IsAtEnd())
