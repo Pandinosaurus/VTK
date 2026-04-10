@@ -37,7 +37,13 @@ LRESULT APIENTRY vtkWin32OutputWindowWndProc(HWND hWnd, UINT message, WPARAM wPa
       int w = LOWORD(lParam); // width of client area
       int h = HIWORD(lParam); // height of client area
 
-      MoveWindow(vtkWin32OutputWindowOutputWindow, 0, 0, w, h, true);
+      if (!MoveWindow(vtkWin32OutputWindowOutputWindow, 0, 0, w, h, true))
+      {
+        auto errorCode = GetLastError();
+        std::string errorMsg = std::system_category().message(errorCode);
+        std::cerr << "MoveWindow failed in vtkWin32OutputWindowWndProc(), error(" << errorCode
+                  << "): " << errorMsg << "\n";
+      }
     }
     break;
     case WM_DESTROY:
@@ -173,9 +179,9 @@ void vtkWin32OutputWindow::AddText(const char* someText)
   {
     free(heapText);
     auto errorCode = GetLastError();
-    std::string message = std::system_category().message(errorCode);
+    std::string errorMsg = std::system_category().message(errorCode);
     std::cerr << "PostMessageW failed in vtkWin32OutputWindow::AddText(), error(" << errorCode
-              << "): " << message << "\n";
+              << "): " << errorMsg << "\n";
   }
 }
 
@@ -202,7 +208,20 @@ static void vtkWin32OutputWindowUIThreadFunc(std::string title, bool show)
     // one run time pointer: 4 bytes on 32-bit builds, 8 bytes
     // on 64-bit builds
     wndClass.cbWndExtra = sizeof(vtkLONG);
-    RegisterClassA(&wndClass);
+    if (!RegisterClassA(&wndClass))
+    {
+      auto errorCode = GetLastError();
+      std::string errorMsg = std::system_category().message(errorCode);
+      std::cerr << "RegisterClassA failed in vtkWin32OutputWindowUIThreadFunc(), error("
+                << errorCode << "): " << errorMsg << "\n";
+      // Signal the calling thread so it doesn't wait forever
+      {
+        std::lock_guard<std::mutex> lock(vtkWin32OutputWindowUIThreadMutex);
+        vtkWin32OutputWindowUIThreadReady = true;
+      }
+      vtkWin32OutputWindowUIThreadCV.notify_one();
+      return;
+    }
   }
 
   // create parent container window
@@ -212,6 +231,20 @@ static void vtkWin32OutputWindowUIThreadFunc(std::string title, bool show)
   HWND win =
     CreateWindowW(L"vtkOutputWindow", wtitle.c_str(), WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, 0, 0,
       width, height, nullptr, nullptr, GetModuleHandle(nullptr), nullptr);
+  if (!win)
+  {
+    auto errorCode = GetLastError();
+    std::string errorMsg = std::system_category().message(errorCode);
+    std::cerr << "CreateWindowW failed in vtkWin32OutputWindowUIThreadFunc(), error(" << errorCode
+              << "): " << errorMsg << "\n";
+    // Signal the calling thread so it doesn't wait forever
+    {
+      std::lock_guard<std::mutex> lock(vtkWin32OutputWindowUIThreadMutex);
+      vtkWin32OutputWindowUIThreadReady = true;
+    }
+    vtkWin32OutputWindowUIThreadCV.notify_one();
+    return;
+  }
 
   // Now create child window with text display box
   CREATESTRUCTA lpParam;
@@ -242,6 +275,21 @@ static void vtkWin32OutputWindowUIThreadFunc(std::string title, bool show)
       lpParam.hInstance,             // handle to application instance
       &lpParam                       // pointer to window-creation data
     );
+  if (!vtkWin32OutputWindowOutputWindow)
+  {
+    auto errorCode = GetLastError();
+    std::string errorMsg = std::system_category().message(errorCode);
+    std::cerr << "CreateWindowA failed in vtkWin32OutputWindowUIThreadFunc(), error(" << errorCode
+              << "): " << errorMsg << "\n";
+    DestroyWindow(win);
+    // Signal the calling thread so it doesn't wait forever
+    {
+      std::lock_guard<std::mutex> lock(vtkWin32OutputWindowUIThreadMutex);
+      vtkWin32OutputWindowUIThreadReady = true;
+    }
+    vtkWin32OutputWindowUIThreadCV.notify_one();
+    return;
+  }
 
   const int maxsize = 5242880;
   SendMessageA(vtkWin32OutputWindowOutputWindow, EM_LIMITTEXT, maxsize, 0L);
@@ -257,8 +305,17 @@ static void vtkWin32OutputWindowUIThreadFunc(std::string title, bool show)
 
   // Run the message loop
   MSG msg;
-  while (GetMessage(&msg, nullptr, 0, 0))
+  BOOL bRet;
+  while ((bRet = GetMessage(&msg, nullptr, 0, 0)) != 0)
   {
+    if (bRet == -1)
+    {
+      auto errorCode = GetLastError();
+      std::string errorMsg = std::system_category().message(errorCode);
+      std::cerr << "GetMessage failed in vtkWin32OutputWindowUIThreadFunc(), error(" << errorCode
+                << "): " << errorMsg << "\n";
+      break;
+    }
     TranslateMessage(&msg);
     DispatchMessage(&msg);
   }
