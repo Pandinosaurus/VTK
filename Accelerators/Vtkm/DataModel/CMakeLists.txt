@@ -43,34 +43,7 @@ vtk_module_set_property(VTK::AcceleratorsVTKmDataModel
   PROPERTY  JOB_POOL_COMPILE
   VALUE     viskores_pool)
 _vtk_module_real_target(vtkm_accel_target VTK::AcceleratorsVTKmDataModel)
-viskores_add_target_information(${vtkm_accel_target}
-                            EXTENDS_VISKORES
-                            MODIFY_CUDA_FLAGS
-                            DEVICE_SOURCES ${sources})
-
-if (TARGET VTK::vtkviskores_cuda)
-  # Temporarily suppress "has address taken but no possible call to it" warnings,
-  # until we figure out its implications.
-  # We are disabling all warnings as nvlink has no known way to suppress
-  # individual warning types.
-  string(APPEND CMAKE_CUDA_FLAGS " -Xnvlink -w")
-
-  list(TRANSFORM nowrap_classes APPEND ".cxx" OUTPUT_VARIABLE nowrap_sources)
-  set(cuda_impl ${nowrap_sources} vtkmDataSet.cxx)
-  set_source_files_properties(${cuda_impl} PROPERTIES LANGUAGE CUDA)
-
-  vtk_module_set_properties(VTK::AcceleratorsVTKmDataModel CUDA_SEPARABLE_COMPILATION ON)
-
-  vtk_module_compile_options(VTK::AcceleratorsVTKmDataModel
-    PUBLIC $<$<COMPILE_LANGUAGE:CUDA>:-Xcudafe --diag_suppress=extra_semicolon>)
-
-elseif (TARGET VTK::vtkviskores_kokkos_cuda)
-  list(TRANSFORM nowrap_classes APPEND ".cxx" OUTPUT_VARIABLE nowrap_sources)
-  set(cuda_impl ${nowrap_sources} vtkmDataSet.cxx)
-  set_source_files_properties(${cuda_impl} PROPERTIES LANGUAGE CUDA)
-  kokkos_compilation(SOURCE ${cuda_impl})
-
-endif()
+vtk_add_viskores_device_target_information(${vtkm_accel_target})
 
 if (MSVC)
   set(msvc_warning_flags
