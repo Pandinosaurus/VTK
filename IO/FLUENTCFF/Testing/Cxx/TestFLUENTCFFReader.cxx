@@ -12,10 +12,12 @@
 #include <string>
 
 //------------------------------------------------------------------------------
-int CompareFLUENTCFFFiles(const std::string& h5Path, const std::string& xmlPath, bool renameFields)
+int CompareFLUENTCFFFiles(
+  const std::string& h5Path, const std::string& xmlPath, bool renameFields, bool readFaces)
 {
   vtkNew<vtkFLUENTCFFReader> reader;
   reader->SetRenameArrays(renameFields);
+  reader->SetReadFaces(readFaces);
   reader->SetFileName(h5Path);
   reader->Update();
 
@@ -42,14 +44,14 @@ int TestFLUENTCFFReader(int argc, char* argv[])
 
   const std::string roomH5Path = dataRoot + "/Data/room.cas.h5";
   const std::string roomXmlPath = dataRoot + "/Data/FLUENTCFF/room.vtm";
-  if (CompareFLUENTCFFFiles(roomH5Path, roomXmlPath, false) == EXIT_FAILURE)
+  if (CompareFLUENTCFFFiles(roomH5Path, roomXmlPath, false, false) == EXIT_FAILURE)
   {
     return EXIT_FAILURE;
   }
 
   const std::string mesh3DH5Path = dataRoot + "/Data/mesh_3ddp.cas.h5";
   const std::string mesh3DXmlPath = dataRoot + "/Data/FLUENTCFF/mesh_3ddp.vtm";
-  if (CompareFLUENTCFFFiles(mesh3DH5Path, mesh3DXmlPath, true) == EXIT_FAILURE)
+  if (CompareFLUENTCFFFiles(mesh3DH5Path, mesh3DXmlPath, true, true) == EXIT_FAILURE)
   {
     return EXIT_FAILURE;
   }
