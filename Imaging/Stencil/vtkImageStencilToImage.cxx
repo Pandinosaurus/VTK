@@ -7,10 +7,9 @@
 #include "vtkImageStencilIterator.h"
 #include "vtkInformation.h"
 #include "vtkInformationVector.h"
+#include "vtkMathUtilities.h"
 #include "vtkObjectFactory.h"
 #include "vtkStreamingDemandDrivenPipeline.h"
-
-#include <algorithm>
 
 VTK_ABI_NAMESPACE_BEGIN
 vtkStandardNewMacro(vtkImageStencilToImage);
@@ -58,17 +57,8 @@ template <class T>
 void vtkImageStencilToImageExecute(vtkImageStencilToImage* self, vtkImageStencilData* stencil,
   vtkImageData* outData, T*, int outExt[6], int id)
 {
-  double inValueD = self->GetInsideValue();
-  double outValueD = self->GetOutsideValue();
-
-  double tmin = outData->GetScalarTypeMin();
-  double tmax = outData->GetScalarTypeMax();
-
-  inValueD = std::clamp(inValueD, tmin, tmax);
-  outValueD = std::clamp(outValueD, tmin, tmax);
-
-  T inValue = static_cast<T>(inValueD);
-  T outValue = static_cast<T>(outValueD);
+  T inValue = vtkMathUtilities::SafeCastFromDouble<T>(self->GetInsideValue());
+  T outValue = vtkMathUtilities::SafeCastFromDouble<T>(self->GetOutsideValue());
 
   vtkImageStencilIterator<T> outIter(outData, stencil, outExt, self, id);
 
