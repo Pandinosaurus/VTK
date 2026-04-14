@@ -45,18 +45,21 @@ def make_index_array(indexes):
     return arr
 
 
-def make_indexed(base_values, indexes, ncomps=1):
+def make_indexed(base_values, indexes, ncomps=1, mapTuples=False):
     """Create a vtkIndexedArray from base values and index list.
 
-    For multi-component arrays, indexes are value-level (flat):
-    len(indexes) must be divisible by ncomps, and ntuples = len(indexes) // ncomps.
+    For multi-component arrays, indexes can be value-level (flat) or tuples level.
+    For value-level, len(indexes) must be divisible by ncomps, and ntuples = len(indexes) // ncomps.
     """
     base = make_aos_array(base_values, ncomps)
     idx = make_index_array(indexes)
     indexed = vtkIndexedArray['float64']()
     indexed.SetNumberOfComponents(ncomps)
-    indexed.SetNumberOfTuples(len(indexes) // ncomps)
-    indexed.ConstructBackend(idx, base)
+    if(mapTuples):
+        indexed.SetNumberOfTuples(len(indexes))
+    else:
+        indexed.SetNumberOfTuples(len(indexes) // ncomps)
+    indexed.ConstructBackend(idx, base, mapTuples)
     return indexed
 
 
@@ -192,8 +195,8 @@ def test_slice_indexing():
     assert_array_equal(numpy.asarray(result), expected)
 
 
-def test_multicomponent():
-    """Test multi-component indexed arrays.
+def test_multicomponent_value_level():
+    """Test multi-component indexed arrays by mapping values.
 
     Indexes are value-level (flat): each index points to a value in the
     flattened base array.  With 2 components, every 2 consecutive indexed
@@ -211,6 +214,33 @@ def test_multicomponent():
     result = numpy.array(indexed)
     expected = numpy.array([[5.0, 6.0], [1.0, 2.0]])
     assert_array_equal(result, expected)
+
+    # Scalar indexing for multi-component
+    row = indexed[0]
+    assert_array_equal(row, numpy.array([5.0, 6.0]))
+
+    row = indexed[1]
+    assert_array_equal(row, numpy.array([1.0, 2.0]))
+
+def test_multicomponent_tuple_level():
+    """Test multi-component indexed arrays by mapping tuples.
+
+    Indexes are tuples-level : each index points to a tuple in the
+    base array.  With 2 components, every consecutive indexed
+    is separated by 2 values in the flattened base array.
+    """
+    # Base: 3 tuples with 2 components each: values [1,2,3,4,5,6]
+    base_values = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+    # Select values [2, 0] -> tuples (5.0,6.0) and (1.0,2.0)
+    indexes = [2, 0]
+
+    indexed = make_indexed(base_values, indexes, ncomps=2, mapTuples=True)
+
+    check(indexed.shape == (2, 2), f"Expected shape (2, 2), got {indexed.shape}")
+
+    result = numpy.array(indexed)
+    expected = numpy.array([[5.0, 6.0], [1.0, 2.0]])
+    assert_array_equal(expected, result)
 
     # Scalar indexing for multi-component
     row = indexed[0]
@@ -443,7 +473,8 @@ test_reduction_methods()
 test_ufuncs()
 test_scalar_indexing()
 test_slice_indexing()
-test_multicomponent()
+test_multicomponent_value_level()
+test_multicomponent_tuple_level()
 test_readonly()
 test_repr()
 test_comparison_operators()
