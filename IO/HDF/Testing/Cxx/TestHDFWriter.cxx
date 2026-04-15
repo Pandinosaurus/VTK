@@ -1,16 +1,21 @@
 // SPDX-FileCopyrightText: Copyright (c) Ken Martin, Will Schroeder, Bill Lorensen
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "HDFTestUtilities.h"
+
 #include "vtkCellData.h"
 #include "vtkConeSource.h"
 #include "vtkDataArray.h"
 #include "vtkDataArraySelection.h"
+#include "vtkDataAssemblyUtilities.h"
 #include "vtkFieldData.h"
 #include "vtkFloatArray.h"
 #include "vtkGroupDataSetsFilter.h"
 #include "vtkHDF5ScopedHandle.h"
 #include "vtkHDFReader.h"
 #include "vtkHDFWriter.h"
+#include "vtkHyperTreeGrid.h"
+#include "vtkHyperTreeGridSource.h"
 #include "vtkIdTypeArray.h"
 #include "vtkImageData.h"
 #include "vtkInformation.h"
@@ -22,15 +27,18 @@
 #include "vtkPartitionedDataSetCollection.h"
 #include "vtkPointData.h"
 #include "vtkPolyData.h"
+#include "vtkRandomHyperTreeGridSource.h"
 #include "vtkSphereSource.h"
 #include "vtkTestUtilities.h"
 #include "vtkTesting.h"
 #include "vtkUnstructuredGrid.h"
+#include "vtkXMLHyperTreeGridWriter.h"
 #include "vtkXMLMultiBlockDataReader.h"
 #include "vtkXMLPartitionedDataSetCollectionReader.h"
 #include "vtkXMLPolyDataReader.h"
 #include "vtkXMLUnstructuredGridReader.h"
 
+#include <cstddef>
 #include <iostream>
 #include <string>
 
@@ -99,7 +107,7 @@ bool TestWriteAndRead(
   writer->SetInputData(data);
   if (options)
   {
-    fullPath = tempPath + options->FileNameSuffix;
+    fullPath = tempPath + options->FileNameSuffix + ".vtkhdf";
     writer->SetUseExternalComposite(options->UseExternalComposite);
     writer->SetUseExternalPartitions(options->UseExternalPartitions);
     writer->SetCompressionLevel(options->CompressionLevel);
@@ -331,7 +339,7 @@ bool TestPartitionedUnstructuredGrid(const std::string& tempDir, const std::stri
   }
 
   // Write and read the partitioned unstructuredGrid in a temp file, compare with base
-  std::string tempPath = tempDir + "/HDFWriter_" + baseName + ".vtkhdf";
+  std::string tempPath = tempDir + "/HDFWriter_" + baseName;
   if (!TestWriteAndReadConfigurations(baseData, tempPath))
   {
     return false;
@@ -358,7 +366,7 @@ bool TestPartitionedPolyData(const std::string& tempDir, const std::string& data
   }
 
   // Write and read the partitioned PolyData in a temp file, compare with base
-  std::string tempPath = tempDir + "/HDFWriter_" + baseName + ".vtkhdf";
+  std::string tempPath = tempDir + "/HDFWriter_" + baseName;
   if (!TestWriteAndReadConfigurations(baseData, tempPath))
   {
     return false;
@@ -385,7 +393,7 @@ bool TestMultiBlock(const std::string& tempDir, const std::string& dataRoot)
   }
 
   // Write and read the vtkMultiBlockDataSet in a temp file, compare with base
-  std::string tempPath = tempDir + "/HDFWriter_" + baseName + ".vtkhdf";
+  std::string tempPath = tempDir + "/HDFWriter_" + baseName;
   if (!TestWriteAndReadConfigurations(baseData, tempPath))
   {
     return false;
@@ -429,8 +437,115 @@ bool TestMultiBlockIdenticalBlockNames(const std::string& tempDir, const std::st
   multiBlock->GetMetaData(1u)->Set(vtkCompositeDataSet::NAME(), "Group");
 
   // Write and read the vtkMultiBlockDataSet in a temp file, compare with base
-  std::string tempPath = tempDir + "/HDFWriter_multiblock_identical.vtkhdf";
+  std::string tempPath = tempDir + "/HDFWriter_multiblock_identical";
   if (!TestWriteAndReadConfigurations(multiBlock, tempPath))
+  {
+    return false;
+  }
+
+  return true;
+}
+
+//----------------------------------------------------------------------------
+bool TestRandomHTG(const std::string& tempDir)
+{
+  vtkNew<vtkRandomHyperTreeGridSource> htgSource;
+  htgSource->SetDimensions(5, 5, 5);
+  htgSource->SetSplitFraction(0.5);
+  htgSource->SetMaskedFraction(0.5);
+  htgSource->Update();
+
+  vtkHyperTreeGrid* htg = htgSource->GetHyperTreeGridOutput();
+  // Write and read the vtkMultiBlockDataSet in a temp file, compare with base
+  std::string tempPath = tempDir + "/HDFWriter_randomhtg";
+  if (!TestWriteAndReadConfigurations(htg, tempPath))
+  {
+    return false;
+  }
+
+  return true;
+}
+
+//----------------------------------------------------------------------------
+bool TestSimpleHTG(const std::string& tempDir)
+{
+  vtkNew<vtkHyperTreeGridSource> htgSource;
+  htgSource->SetDimensions(3, 3, 2);
+  htgSource->SetBranchFactor(2);
+  htgSource->SetMaxDepth(3);
+  htgSource->SetDescriptor(".RRR|..R..... .R...... ........ | ........ ........");
+  htgSource->SetUseMask(true);
+  htgSource->SetMask("0111|11111111 11111111 11100111 | 01111111 11111101");
+  htgSource->Update();
+
+  vtkHyperTreeGrid* htg = htgSource->GetHyperTreeGridOutput();
+  // Write and read the vtkMultiBlockDataSet in a temp file, compare with base
+  std::string tempPath = tempDir + "/HDFWriter_simplehtg";
+  if (!TestWriteAndReadConfigurations(htg, tempPath))
+  {
+    return false;
+  }
+
+  return true;
+}
+
+//----------------------------------------------------------------------------
+bool TestPDCCompositeHTG(const std::string& tempDir)
+{
+  vtkNew<vtkHyperTreeGridSource> htgSource1;
+  htgSource1->SetBranchFactor(2);
+  htgSource1->SetDimensions(6, 4, 1);
+  htgSource1->SetMaxDepth(2);
+  htgSource1->SetUseMask(true);
+
+  htgSource1->SetDescriptor("... .R. ... ... ... | ....");
+  htgSource1->SetMask("111 111 111 000 000 | 1111");
+  htgSource1->Update();
+
+  vtkNew<vtkHyperTreeGridSource> htgSource2;
+  htgSource2->SetBranchFactor(2);
+  htgSource2->SetDimensions(6, 4, 1);
+  htgSource2->SetMaxDepth(2);
+  htgSource2->SetUseMask(true);
+
+  htgSource2->SetDescriptor("... ... ... .R. ... | ....");
+  htgSource2->SetMask("000 000 000 111 111 | 1111");
+  htgSource2->Update();
+
+  // Hyper-Tree Art: 3D Recursion (2026)
+  vtkNew<vtkHyperTreeGridSource> htgSource3;
+  htgSource3->SetBranchFactor(2);
+  htgSource3->SetDimensions(3, 3, 3);
+  htgSource3->SetMaxDepth(4);
+  htgSource3->SetDescriptor(".......R|.......R|.......R|........");
+  htgSource3->SetMask("11011011|11011011|11011011|11011011");
+  htgSource3->SetUseMask(true);
+
+  vtkNew<vtkGroupDataSetsFilter> pdsGroup;
+  pdsGroup->SetOutputTypeToPartitionedDataSet();
+  pdsGroup->AddInputConnection(htgSource1->GetOutputPort());
+  pdsGroup->AddInputConnection(htgSource2->GetOutputPort());
+
+  vtkNew<vtkGroupDataSetsFilter> pdsGroup2;
+  pdsGroup2->SetOutputTypeToPartitionedDataSet();
+  pdsGroup2->AddInputConnection(htgSource3->GetOutputPort());
+
+  vtkNew<vtkGroupDataSetsFilter> pdcGroup;
+  pdcGroup->SetOutputTypeToPartitionedDataSetCollection();
+  pdcGroup->AddInputConnection(pdsGroup->GetOutputPort());
+  pdcGroup->AddInputConnection(pdsGroup2->GetOutputPort());
+
+  vtkPartitionedDataSetCollection* pdc =
+    vtkPartitionedDataSetCollection::SafeDownCast(pdcGroup->GetOutputDataObject(0));
+
+  // Original PDC has no assembly set, but VTKHDF writer sets one by default, so we create one.
+  vtkNew<vtkDataAssembly> hierarchy;
+  vtkDataAssemblyUtilities::GenerateHierarchy(pdc, hierarchy, nullptr);
+  pdc->SetDataAssembly(hierarchy);
+
+  // Write and read the vtkMultiBlockDataSet in a temp file, compare with base
+  std::string tempPath = tempDir + "/HDFWriter_pdcHTG";
+  if (!TestWriteAndReadConfigurations(pdc, tempPath))
   {
     return false;
   }
@@ -458,7 +573,7 @@ bool TestPartitionedDataSetCollection(const std::string& tempDir, const std::str
     }
 
     // Write and read the vtkPartitionedDataSetCollection in a temp file, compare with base
-    std::string tempPath = tempDir + "/HDFWriter_" + baseName + ".vtkhdf";
+    std::string tempPath = tempDir + "/HDFWriter_" + baseName;
     if (!TestWriteAndReadConfigurations(baseData, tempPath))
     {
       return false;
@@ -572,6 +687,9 @@ int TestHDFWriter(int argc, char* argv[])
   bool testPasses = true;
   testPasses &= TestEmptyPolyData(tempDir);
   testPasses &= TestSpherePolyData(tempDir);
+  testPasses &= TestSimpleHTG(tempDir);
+  testPasses &= TestRandomHTG(tempDir);
+  testPasses &= TestPDCCompositeHTG(tempDir);
   testPasses &= TestComplexPolyData(tempDir, dataRoot);
   testPasses &= TestUnstructuredGrid(tempDir, dataRoot);
   testPasses &= TestDataSetAttributes(tempDir);
