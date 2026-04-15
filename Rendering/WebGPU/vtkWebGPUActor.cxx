@@ -118,8 +118,6 @@ void vtkWebGPUActor::Render(vtkRenderer* renderer, vtkMapper* mapper)
         {
           this->CreateBindGroups(wgpuConfiguration);
         }
-        // reset this flag because the `mapper->Render()` call shall invalidate the bundle if it
-        // determines that the render bundle needs to be recorded once again.
         mapper->Render(renderer, this);
         bool updateBuffers = this->CacheActorRenderOptions();
         updateBuffers |= this->CacheActorShadeOptions();

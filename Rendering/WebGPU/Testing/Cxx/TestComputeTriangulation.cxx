@@ -191,7 +191,7 @@ int TestComputeTriangulation(int argc, char* argv[])
       wgpu::Buffer CellIdOffsetUniformBuffer;
     } converterData;
     vtkLogStartScope(INFO, "Compute triangle lists in GPU");
-    converter->DispatchCellToPrimitiveComputePipeline(wgpuConfig, polygons, VTK_SURFACE,
+    converter->DispatchCellArrayToPrimitiveComputePipeline(wgpuConfig, polygons, VTK_SURFACE,
       VTK_POLYGON, 0, &converterData.VertexCount, &converterData.ConnectivityBuffer,
       &converterData.CellIdBuffer, &converterData.EdgeArrayBuffer,
       &converterData.CellIdOffsetUniformBuffer);
