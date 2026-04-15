@@ -1029,7 +1029,7 @@ bool vtkHDFReader::Implementation::ReadHyperTreeGridData(vtkHyperTreeGrid* htg,
 
   // Iterate over trees, building them taking depth limiter into consideration.
   // Also appends masking and cell data
-  for (const vtkIdType& treeId : treeIds)
+  for (size_t treeId = 0; treeId < treeIds.size(); treeId++)
   {
     // Compute both the total number of cells and the number of cells below the depth limit in the
     // current tree Number of cells in the current tree = sum of the number of cells in all depths
@@ -1052,7 +1052,7 @@ bool vtkHDFReader::Implementation::ReadHyperTreeGridData(vtkHyperTreeGrid* htg,
     // The descriptor has 1 bit entry for each cell in the tree, except for the last depth
     const vtkIdType descriptorSize = totalTreeSize - lastDepthSize;
     const vtkIdType readableDescriptorSize = readableTreeSize - lastReadableDepthSize;
-    htg->InitializeNonOrientedCursor(treeCursor, treeId, true);
+    htg->InitializeNonOrientedCursor(treeCursor, treeIds[treeId], true);
     treeCursor->SetGlobalIndexStart(outputCellOffset);
 
     if (!this->AppendCellDataForHyperTree(
