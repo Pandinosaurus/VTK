@@ -622,6 +622,36 @@ test_metadata_propagation()
 
 
 # -------------------------------------------------------------------
+# 14. No reference cycle — array and vtkBuffer must be collectable
+# -------------------------------------------------------------------
+def test_no_leak():
+    import gc
+
+    from vtkmodules.vtkCommonCore import vtkObjectBase
+
+    gc.collect()
+    before = {id(o) for o in gc.get_objects() if isinstance(o, vtkObjectBase)}
+
+    arr = vtkDoubleArray()
+    arr.InsertNextValue(0)
+    # Take an element — exercises __array__ and populates _array_cache
+    _ = arr[0]
+
+    del arr
+    gc.collect()
+
+    leaked = [o for o in gc.get_objects()
+              if isinstance(o, vtkObjectBase) and id(o) not in before]
+    check(leaked == [],
+          f"VTKAOSArray must not leak after GC; leaked: "
+          f"{[o.__class__.__name__ for o in leaked]}")
+
+    print("  test_no_leak PASSED")
+
+test_no_leak()
+
+
+# -------------------------------------------------------------------
 # Done
 # -------------------------------------------------------------------
 if errors:
