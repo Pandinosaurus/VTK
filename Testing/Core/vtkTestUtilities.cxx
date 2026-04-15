@@ -1760,6 +1760,24 @@ struct TestDataObjectsImpl<vtkHyperTreeGrid>
       return false;
     }
 
+    if (!vtkTestUtilities::CompareAbstractArray(htg1->GetXCoordinates(), htg2->GetXCoordinates()))
+    {
+      vtkLog(ERROR, "X Coordinates don't match between the 2 input HyperTreeGrid");
+      return false;
+    }
+
+    if (!vtkTestUtilities::CompareAbstractArray(htg1->GetYCoordinates(), htg2->GetYCoordinates()))
+    {
+      vtkLog(ERROR, "Y Coordinates don't match between the 2 input HyperTreeGrid");
+      return false;
+    }
+
+    if (!vtkTestUtilities::CompareAbstractArray(htg1->GetZCoordinates(), htg2->GetZCoordinates()))
+    {
+      vtkLog(ERROR, "Z Coordinates don't match between the 2 input HyperTreeGrid");
+      return false;
+    }
+
     // Iterate over HTGs
     vtkIdType indexHTG1 = 0, indexHTG2 = 0;
     vtkHyperTreeGrid::vtkHyperTreeGridIterator iterator1, iterator2;
