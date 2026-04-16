@@ -1647,6 +1647,16 @@ uniform int vertex_pass;)";
     diffuseColor = intensity_diffuse * vertex_color;
     specularColor = intensity_specular * vertex_color;
   })";
+  std::string colorSpaceConversionImpl;
+  if (actor->GetProperty()->GetInterpolation() == VTK_PBR)
+  {
+    // vertex/cell coloring needs proper linear conversion for PBR
+    colorSpaceConversionImpl = R"(
+  ambientColor = pow(ambientColor, vec3(2.2));
+  diffuseColor = pow(diffuseColor, vec3(2.2));
+  specularColor = pow(specularColor, vec3(2.2));
+  )";
+  }
   switch (this->ShaderColorSource)
   {
     case ShaderColorSourceAttribute::Point:
@@ -1679,6 +1689,7 @@ uniform int vertex_pass;)";
   float opacity = intensity_opacity * vertexColorVS.a;
 )";
       oss << vertexPassColorImpl;
+      oss << colorSpaceConversionImpl;
       vtkShaderProgram::Substitute(fsSource, "//VTK::Color::Impl", oss.str());
       break;
     case ShaderColorSourceAttribute::PointTexture:
@@ -1695,6 +1706,7 @@ uniform int vertex_pass;)";
   float opacity = intensity_opacity * texColor.a;
 )";
       oss << vertexPassColorImpl;
+      oss << colorSpaceConversionImpl;
       vtkShaderProgram::Substitute(fsSource, "//VTK::Color::Impl", oss.str());
       break;
     case ShaderColorSourceAttribute::Uniform:
