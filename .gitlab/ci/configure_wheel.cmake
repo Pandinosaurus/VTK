@@ -81,7 +81,6 @@ if(NOT WIN32)
   set(VTK_MODULE_ENABLE_VTK_RenderingOpenXR NO CACHE STRING "") # OpenXR disable on every system except Windows
 endif()
 
-set(VTK_MODULE_ENABLE_VTK_RenderingRayTracing NO CACHE STRING "") # OSPRay
 set(VTK_MODULE_ENABLE_VTK_RenderingZSpace NO CACHE STRING "") # zSpace
 set(VTK_MODULE_ENABLE_VTK_fides NO CACHE STRING "") # ADIOS2
 set(VTK_MODULE_ENABLE_VTK_xdmf3 NO CACHE STRING "") # Boost
