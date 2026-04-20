@@ -14,6 +14,7 @@
 #include <iostream>
 
 #define CHECK_GRADIENT(array, tupleId, x, y, z)                                                    \
+  do                                                                                               \
   {                                                                                                \
     double grad[3];                                                                                \
     array->GetTuple((tupleId), grad);                                                              \
@@ -26,7 +27,7 @@
                 << std::endl;                                                                      \
       return EXIT_FAILURE;                                                                         \
     }                                                                                              \
-  }
+  } while (0)
 
 //------------------------------------------------------------------------------
 int TestHyperTreeGridGradient(int, char*[])
