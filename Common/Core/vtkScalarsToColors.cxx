@@ -1573,7 +1573,6 @@ void vtkScalarsToColors::MapScalarsThroughTable(vtkAbstractArray* input, unsigne
     vtkErrorMacro(<< "MapScalarsThroughTable: Unknown input ScalarType "
                   << input->GetDataTypeAsString());
     return;
-    ;
   }
 
   vtkSmartPointer<vtkDataArray> realInput = inputDA;

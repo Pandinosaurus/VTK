@@ -140,23 +140,26 @@
 #endif // VTK_FOAMFILE_DEBUG
 
 #define VTK_OPENFOAM_FROM_CHARS_RESULT_IF_ERROR_COMMAND(from_chars_result, string, value, command) \
-  switch (from_chars_result.ec)                                                                    \
+  do                                                                                               \
   {                                                                                                \
-    case std::errc::invalid_argument:                                                              \
+    switch (from_chars_result.ec)                                                                  \
     {                                                                                              \
-      vtkLogF(ERROR, "The given argument was invalid, failed to get the converted " #value ".");   \
-      command;                                                                                     \
+      case std::errc::invalid_argument:                                                            \
+      {                                                                                            \
+        vtkLogF(ERROR, "The given argument was invalid, failed to get the converted " #value "."); \
+        command;                                                                                   \
+      }                                                                                            \
+      case std::errc::result_out_of_range:                                                         \
+      {                                                                                            \
+        value = string[0] == '-' ? -std::numeric_limits<decltype(value)>::infinity()               \
+                                 : std::numeric_limits<decltype(value)>::infinity();               \
+        break;                                                                                     \
+      }                                                                                            \
+      default:                                                                                     \
+      {                                                                                            \
+      }                                                                                            \
     }                                                                                              \
-    case std::errc::result_out_of_range:                                                           \
-    {                                                                                              \
-      value = string[0] == '-' ? -std::numeric_limits<decltype(value)>::infinity()                 \
-                               : std::numeric_limits<decltype(value)>::infinity();                 \
-      break;                                                                                       \
-    }                                                                                              \
-    default:                                                                                       \
-    {                                                                                              \
-    }                                                                                              \
-  }
+  } while (0)
 
 //------------------------------------------------------------------------------
 

@@ -111,22 +111,25 @@ VTK_ALWAYS_INLINE auto from_chars(const std::string_view str, T& value, int base
 
 // Create a macro that evaluates the result of from_chars, checks for errors, and executes a command
 #define VTK_FROM_CHARS_RESULT_IF_ERROR_COMMAND(from_chars_result, value, command)                  \
-  switch (from_chars_result.ec)                                                                    \
+  do                                                                                               \
   {                                                                                                \
-    case std::errc::invalid_argument:                                                              \
+    switch (from_chars_result.ec)                                                                  \
     {                                                                                              \
-      vtkLogF(ERROR, "The given argument was invalid, failed to get the converted " #value ".");   \
-      command;                                                                                     \
+      case std::errc::invalid_argument:                                                            \
+      {                                                                                            \
+        vtkLogF(ERROR, "The given argument was invalid, failed to get the converted " #value "."); \
+        command;                                                                                   \
+      }                                                                                            \
+      case std::errc::result_out_of_range:                                                         \
+      {                                                                                            \
+        vtkLogF(ERROR, "The result is out of range, failed to get the converted " #value ".");     \
+        command;                                                                                   \
+      }                                                                                            \
+      default:                                                                                     \
+      {                                                                                            \
+      }                                                                                            \
     }                                                                                              \
-    case std::errc::result_out_of_range:                                                           \
-    {                                                                                              \
-      vtkLogF(ERROR, "The result is out of range, failed to get the converted " #value ".");       \
-      command;                                                                                     \
-    }                                                                                              \
-    default:                                                                                       \
-    {                                                                                              \
-    }                                                                                              \
-  }
+  } while (0)
 // Create a macro that evaluates the result of from_chars, checks for errors, and breaks
 #define VTK_FROM_CHARS_RESULT_IF_ERROR_BREAK(from_chars_result, value)                             \
   VTK_FROM_CHARS_RESULT_IF_ERROR_COMMAND(from_chars_result, value, break)

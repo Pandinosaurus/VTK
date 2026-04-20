@@ -161,7 +161,7 @@ vtkStdString vtkDelimitedTextWriter::GetString(vtkStdString string)
 bool vtkDelimitedTextWriter::WriteDataAndReturn()
 {
   bool ret = false;
-  ;
+
   vtkTable* rg = vtkTable::SafeDownCast(this->GetInput());
   if (rg)
   {

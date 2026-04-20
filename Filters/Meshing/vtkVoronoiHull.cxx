@@ -292,7 +292,6 @@ ClipIntersectionStatus vtkVoronoiHull::IntersectWithPlane(
       // Points inside the clip are kept.
       if (val < -tol)
       {
-        ;
       }
       // If a point is outside the clip, it will be discarded. The faces
       // attached to the point require further processing.
