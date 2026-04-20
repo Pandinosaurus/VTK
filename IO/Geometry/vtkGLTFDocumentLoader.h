@@ -335,6 +335,9 @@ public:
 
     // extension KHR_materials_unlit
     bool Unlit;
+
+    // extension KHR_materials_ior
+    double IOR;
   };
 
   /**

@@ -449,6 +449,9 @@ bool ApplyGLTFMaterialToVTKActor(std::shared_ptr<vtkGLTFDocumentLoader::Model> m
     property->SetNormalTexture(normalTex);
   }
 
+  // extension KHR_materials_ior
+  actor->GetProperty()->SetBaseIOR(material.IOR);
+
   // extension KHR_materials_unlit
   actor->GetProperty()->SetLighting(!material.Unlit);
 

@@ -133,7 +133,7 @@ void GenerateIndicesForPrimitive(vtkGLTFDocumentLoader::Primitive& primitive)
 
 //------------------------------------------------------------------------------
 const std::vector<std::string> vtkGLTFDocumentLoader::SupportedExtensions = { "KHR_lights_punctual",
-  "KHR_materials_unlit", "KHR_texture_transform" };
+  "KHR_materials_unlit", "KHR_texture_transform", "KHR_materials_ior" };
 
 //------------------------------------------------------------------------------
 vtkStandardNewMacro(vtkGLTFDocumentLoader);
