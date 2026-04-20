@@ -25,6 +25,7 @@
 
 #include <iostream>
 #include <sstream>
+#include <unordered_set>
 
 struct vtkSessionImpl
 {
@@ -32,6 +33,7 @@ struct vtkSessionImpl
   vtkSessionJsonParseFunc ParseJson;
   vtkSessionJsonStringifyFunc StringifyJson;
   std::map<std::string, std::set<std::string>> SkippedClassProperties;
+  std::unordered_map<vtkTypeUInt32, std::unordered_set<unsigned long>> ObserverTags;
 };
 
 struct CallbackBridge
@@ -500,7 +502,9 @@ extern "C"
         auto* bridge = reinterpret_cast<CallbackBridge*>(clientData);
         bridge->F(bridge->SenderId, vtkCommand::GetStringFromEventId(eid));
       });
-    return objectImpl->AddObserver(eventName, callbackCmd);
+    const auto tag = objectImpl->AddObserver(eventName, callbackCmd);
+    session->ObserverTags[object].insert(tag);
+    return tag;
   }
 
   //-------------------------------------------------------------------------------
@@ -513,6 +517,13 @@ extern "C"
       return vtkSessionResultFailure;
     }
     objectImpl->RemoveObserver(tag);
+    if (auto mapIt = session->ObserverTags.find(object); mapIt != session->ObserverTags.end())
+    {
+      if (auto it = mapIt->second.find(tag); it != mapIt->second.end())
+      {
+        mapIt->second.erase(it);
+      }
+    }
     return vtkSessionResultSuccess;
   }
 
@@ -524,7 +535,14 @@ extern "C"
     {
       return vtkSessionResultFailure;
     }
-    objectImpl->RemoveAllObservers();
+    if (auto mapIt = session->ObserverTags.find(object); mapIt != session->ObserverTags.end())
+    {
+      for (const auto& tag : mapIt->second)
+      {
+        objectImpl->RemoveObserver(tag);
+      }
+      session->ObserverTags.erase(mapIt);
+    }
     return vtkSessionResultSuccess;
   }
 
