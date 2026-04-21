@@ -770,11 +770,18 @@ bool vtkGLTFDocumentLoaderInternals::LoadMaterial(
   vtkGLTFUtils::GetStringValue(root, "name", material.Name);
 
   material.Unlit = false;
+  material.IOR = 1.5;
 
   auto extRootIt = root.find("extensions");
   if (extRootIt != root.end())
   {
     material.Unlit = extRootIt.value().find("KHR_materials_unlit") != extRootIt.value().end();
+
+    auto iorIt = extRootIt.value().find("KHR_materials_ior");
+    if (iorIt != extRootIt.value().end())
+    {
+      vtkGLTFUtils::GetDoubleValue(iorIt.value(), "ior", material.IOR);
+    }
   }
 
   return true;
