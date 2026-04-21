@@ -785,16 +785,27 @@ bool vtkHDFWriter::WriteDatasetToFile(hid_t group, vtkDataObjectTree* input)
 
   if (auto* pdc = vtkPartitionedDataSetCollection::SafeDownCast(input))
   {
+    auto pdcCopy = vtk::TakeSmartPointer(vtkPartitionedDataSetCollection::New());
+    vtkNew<vtkDataAssembly> assembly;
+    if (!pdc->GetDataAssembly())
+    {
+      vtkDataAssemblyUtilities::GenerateHierarchy(pdc, assembly, pdcCopy);
+    }
+    else
+    {
+      pdcCopy = pdc;
+    }
+
     writeSuccess &= this->Impl->WriteHeader(group, "PartitionedDataSetCollection");
 
     // Write vtkPartitionedDataSets, at the top level
-    writeSuccess &= this->AppendBlocks(group, pdc);
+    writeSuccess &= this->AppendBlocks(group, pdcCopy);
 
     // For PDC, the assembly is stored in the separate vtkDataAssembly structure
     if (this->CurrentTimeIndex == 0)
     {
       writeSuccess &=
-        this->AppendAssembly(this->Impl->CreateHdfGroupWithLinkOrder(group, "Assembly"), pdc);
+        this->AppendAssembly(this->Impl->CreateHdfGroupWithLinkOrder(group, "Assembly"), pdcCopy);
     }
   }
   else if (auto* mb = vtkMultiBlockDataSet::SafeDownCast(input))
@@ -2005,15 +2016,7 @@ bool vtkHDFWriter::AppendExternalBlock(vtkDataObject* block, const std::string& 
 //------------------------------------------------------------------------------
 bool vtkHDFWriter::AppendAssembly(hid_t assemblyGroup, vtkPartitionedDataSetCollection* pdc)
 {
-  vtkSmartPointer<vtkDataAssembly> assembly = vtk::TakeSmartPointer(vtkDataAssembly::New());
-  if (pdc->GetDataAssembly())
-  {
-    assembly = pdc->GetDataAssembly();
-  }
-  else
-  {
-    vtkDataAssemblyUtilities::GenerateHierarchy(pdc, assembly, nullptr);
-  }
+  vtkDataAssembly* assembly = pdc->GetDataAssembly();
 
   std::vector<int> assemblyIndices = assembly->GetChildNodes(
     assembly->GetRootNode(), true, vtkDataAssembly::TraversalOrder::DepthFirst);
