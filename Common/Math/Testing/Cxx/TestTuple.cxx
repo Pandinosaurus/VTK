@@ -163,7 +163,7 @@ int ExerciseTupleMembers(const std::string& label)
   const vtkTuple<double, Size> castTuple = defaultTuple.template Cast<double>();
   for (int i = 0; i < Size; ++i)
   {
-    if (std::abs(castTuple[i] - static_cast<double>(defaultTuple[i])) > 1e-12)
+    if (std::abs(castTuple[i] - static_cast<double>(defaultTuple[i])) > GetTupleTolerance<T>())
     {
       vtkLog(ERROR, << label << ": Cast<double>() failed at index " << i);
       ++retVal;
