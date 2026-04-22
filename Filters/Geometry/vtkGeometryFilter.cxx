@@ -97,6 +97,9 @@ vtkGeometryFilter::vtkGeometryFilter()
 
   // Enable delegation to an internal vtkDataSetSurfaceFilter.
   this->Delegation = true;
+
+  this->CachedUnstructuredInfo = nullptr;
+  this->CachedUnstructuredInfoMTime = 0;
 }
 
 //------------------------------------------------------------------------------
@@ -104,6 +107,7 @@ vtkGeometryFilter::~vtkGeometryFilter()
 {
   this->SetOriginalCellIdsName(nullptr);
   this->SetOriginalPointIdsName(nullptr);
+  delete this->CachedUnstructuredInfo;
 }
 
 //------------------------------------------------------------------------------
@@ -3218,6 +3222,28 @@ int vtkGeometryFilter::UnstructuredGridExecute(vtkDataSet* dataSetInput, vtkPoly
   vtkGeometryFilterHelper* info, vtkPolyData* excludedFaces)
 {
   const auto uGrid = vtkUnstructuredGrid::SafeDownCast(dataSetInput);
+
+  // Reuse a previously-computed characterization when the input's cell
+  // array hasn't changed. CharacterizeUnstructuredGrid is a parallel
+  // O(ncells) scan over all cell types, which is pure waste for static
+  // topology — the scan's result depends only on the cell array, so we
+  // cache it keyed on that array's MTime.
+  if (info == nullptr && uGrid != nullptr && uGrid->GetCells() != nullptr)
+  {
+    vtkMTimeType cellsMTime = uGrid->GetCells()->GetMTime();
+    if (this->CachedUnstructuredInfo && this->CachedUnstructuredInfoMTime == cellsMTime)
+    {
+      info = this->CachedUnstructuredInfo;
+    }
+    else
+    {
+      info = vtkGeometryFilterHelper::CharacterizeUnstructuredGrid(uGrid);
+      delete this->CachedUnstructuredInfo;
+      this->CachedUnstructuredInfo = info;
+      this->CachedUnstructuredInfoMTime = cellsMTime;
+    }
+  }
+
 #ifdef VTK_USE_64BIT_IDS
   bool use64BitsIds = (dataSetInput->GetNumberOfPoints() > VTK_TYPE_INT32_MAX ||
     dataSetInput->GetNumberOfCells() > VTK_TYPE_INT32_MAX);
