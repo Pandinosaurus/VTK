@@ -189,20 +189,27 @@ void vtkMPIController::Finalize(int finalizedExternally)
 // during construction).
 void vtkMPIController::InitializeCommunicator(vtkMPICommunicator* comm)
 {
-  if (this->Communicator != comm)
+  if (this->Communicator == comm)
   {
-    if (this->Communicator != nullptr)
-    {
-      this->Communicator->UnRegister(this);
-    }
-    this->Communicator = comm;
-    if (this->Communicator != nullptr)
-    {
-      this->Communicator->Register(this);
-    }
-
-    this->Modified();
+    return;
   }
+
+  if (this->Communicator != nullptr)
+  {
+    this->Communicator->UnRegister(this);
+  }
+
+  this->Communicator = comm;
+
+  if (comm == nullptr)
+  {
+    return;
+  }
+
+  this->Communicator->Register(this);
+  comm->InitializeAttributes();
+
+  this->Modified();
 }
 
 // Delete the previous RMI communicator and creates a new one
