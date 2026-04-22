@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 #include "vtkHDFWriterImplementation.h"
 
-#include "H5Ppublic.h"
 #include "H5public.h"
 #include "vtkDataSetAttributes.h"
 #include "vtkFieldData.h"
@@ -23,14 +22,29 @@ VTK_ABI_NAMESPACE_BEGIN
 namespace PATH
 {
 // VTKHDF Group & Dataset paths definitions, used to create virtual datasets properly in meta-files.
+
+// vtkPointSet
 const std::string POINTS{ "Points" };
 const std::string OFFSETS{ "Offsets" };
 const std::string TYPES{ "Types" };
 const std::string CONNECTIVITY{ "Connectivity" };
-
 const std::string NUMBER_OF_POINTS{ "NumberOfPoints" };
 const std::string NUMBER_OF_CELLS{ "NumberOfCells" };
 const std::string NUMBER_OF_CONNECTIVITY_IDS{ "NumberOfConnectivityIds" };
+
+// vtkHyperTreeGrid
+const std::string DEPTH_PER_TREE{ "DepthPerTree" };
+const std::string NUMBER_OF_CELLS_PER_TREE_DEPTH{ "NumberOfCellsPerTreeDepth" };
+const std::string DESCRIPTORS{ "Descriptors" };
+const std::string TREE_IDS{ "TreeIds" };
+const std::string MASK{ "Mask" };
+const std::string NUMBER_OF_TREES{ "NumberOfTrees" };
+const std::string NUMBER_OF_DEPTHS{ "NumberOfDepths" };
+const std::string DESCRIPTORS_SIZE{ "DescriptorsSize" };
+const std::string XCOORDS{ "XCoordinates" };
+const std::string YCOORDS{ "YCoordinates" };
+const std::string ZCOORDS{ "ZCoordinates" };
+
 const std::string CELL_DATA{ "CellData" };
 const std::string POINT_DATA{ "PointData" };
 const std::string FIELD_DATA{ "FieldData" };
@@ -43,7 +57,7 @@ const std::string STEPS_CONNECTIVITY_ID_OFFSETS{ "Steps/ConnectivityIdOffsets" }
 const std::string STEPS_NUMBER_OF_PARTS{ "Steps/NumberOfParts" };
 
 const std::vector<std::string> COUNT_VALUES = { NUMBER_OF_POINTS, NUMBER_OF_CELLS,
-  NUMBER_OF_CONNECTIVITY_IDS };
+  NUMBER_OF_CONNECTIVITY_IDS, NUMBER_OF_TREES, NUMBER_OF_DEPTHS, DESCRIPTORS_SIZE };
 const std::vector<std::string> PRIMITIVE_TYPES = { "Strips", "Polygons", "Vertices", "Lines" };
 
 /**
@@ -293,6 +307,37 @@ vtkHDF::ScopedH5SHandle vtkHDFWriter::Implementation::CreateSimpleDataspace(
     return H5I_INVALID_HID;
   }
   return dataspace;
+}
+
+//------------------------------------------------------------------------------
+vtkHDF::ScopedH5AHandle vtkHDFWriter::Implementation::CreateVectorAttribute(
+  hid_t group, const char* name, const std::vector<unsigned int>& values)
+{
+  if (H5Aexists(group, name))
+  {
+    return H5Aopen_name(group, name);
+  }
+
+  hsize_t size = values.size();
+  vtkHDF::ScopedH5SHandle vectorSpaceAttribute = H5Screate_simple(1, &size, nullptr);
+  if (vectorSpaceAttribute == H5I_INVALID_HID)
+  {
+    return H5I_INVALID_HID;
+  }
+
+  vtkHDF::ScopedH5AHandle attribute{ H5Acreate(
+    group, name, H5T_STD_I64LE, vectorSpaceAttribute, H5P_DEFAULT, H5P_DEFAULT) };
+  if (attribute == H5I_INVALID_HID)
+  {
+    return H5I_INVALID_HID;
+  }
+
+  if (H5Awrite(attribute, H5T_NATIVE_INT, values.data()) < 0)
+  {
+    return H5I_INVALID_HID;
+  }
+
+  return attribute;
 }
 
 //------------------------------------------------------------------------------
@@ -1051,6 +1096,7 @@ bool vtkHDFWriter::Implementation::CreateVirtualDataset(
       // Determine the number of parts in the file for the current step
       // Using either NumberOfParts (when temporal) or the size of NumberOfPoints otherwise.
       std::string numPointsName = basePath + "/" + PATH::NUMBER_OF_POINTS;
+      std::string numCellsName = basePath + "/" + PATH::NUMBER_OF_CELLS;
       bool hasStepsGroup =
         H5Lexists(this->OpenExistingGroup(this->Subfiles[file], basePath.c_str()),
           PATH::STEPS.c_str(), H5P_DEFAULT) > 0;
@@ -1068,6 +1114,11 @@ bool vtkHDFWriter::Implementation::CreateVirtualDataset(
       else if (H5Lexists(this->Subfiles[file], numPointsName.c_str(), H5P_DEFAULT) > 0)
       {
         numParts = vtkHDFUtilities::GetDimensions(this->Subfiles[file], numPointsName.c_str())[0];
+      }
+      else if (H5Lexists(this->Subfiles[file], numCellsName.c_str(), H5P_DEFAULT) > 0)
+      {
+        // HTG does not have points, so use numCells instead
+        numParts = vtkHDFUtilities::GetDimensions(this->Subfiles[file], numCellsName.c_str())[0];
       }
       else
       {
@@ -1111,7 +1162,7 @@ bool vtkHDFWriter::Implementation::CreateVirtualDataset(
           continue;
         }
 
-        // Open source dataset/dataspace
+        // Open the source dataset/dataspace
         vtkHDF::ScopedH5DHandle sourceDataset =
           H5Dopen(this->Subfiles[file], datasetPath.c_str(), H5P_DEFAULT);
         if (sourceDataset == H5I_INVALID_HID)
@@ -1194,13 +1245,20 @@ bool vtkHDFWriter::Implementation::CreateVirtualDataset(
             }
 
             mappingSize[0] = partNbCells;
-            vtkDebugWithObjectMacro(this->Writer, << "Mapping size is " << mappingSize[0]);
 
             // For N cells, store N+1 cell offsets
             if (name == PATH::OFFSETS && partNbCells != 0)
             {
               mappingSize[0]++;
             }
+
+            // Find the number of bytes corresponding to the mask size
+            if (name == PATH::MASK)
+            {
+              mappingSize[0] = (mappingSize[0] + (8 - mappingSize[0]) % 8) / 8;
+            }
+
+            vtkDebugWithObjectMacro(this->Writer, << "Mapping size is " << mappingSize[0]);
             break;
           }
           case IndexingMode::Connectivity:
@@ -1219,6 +1277,51 @@ bool vtkHDFWriter::Implementation::CreateVirtualDataset(
             }
 
             mappingSize[0] = nbConnectivityIdPart;
+            break;
+          }
+          case IndexingMode::Trees:
+          {
+            vtkDebugWithObjectMacro(this->Writer, << "Is Indexed on trees");
+            hsize_t partNbTrees =
+              this->GetSubfileNumberOf(basePath, PATH::NUMBER_OF_TREES, file, part + partOffset);
+            mappingSize[0] = partNbTrees;
+            break;
+          }
+          case IndexingMode::TreeDepths:
+          {
+            vtkDebugWithObjectMacro(this->Writer, << "Is Indexed on tree depths");
+            hsize_t partNbDepths =
+              this->GetSubfileNumberOf(basePath, PATH::NUMBER_OF_DEPTHS, file, part + partOffset);
+            mappingSize[0] = partNbDepths;
+            break;
+          }
+          case IndexingMode::Descriptor:
+          {
+            vtkDebugWithObjectMacro(this->Writer, << "Is Indexed on descriptor sizes");
+            hsize_t partDescrSize =
+              this->GetSubfileNumberOf(basePath, PATH::DESCRIPTORS_SIZE, file, part + partOffset);
+            mappingSize[0] = (partDescrSize + (8 - partDescrSize) % 8) / 8;
+            break;
+          }
+          case IndexingMode::HTGCoords:
+          {
+            vtkDebugWithObjectMacro(this->Writer, << "Is Indexed on HTG Coords");
+            std::vector<unsigned int> dimensions(3);
+            vtkHDFUtilities::GetAttribute(
+              this->OpenExistingGroup(this->Subfiles[file], basePath.c_str()), "Dimensions",
+              dimensions.size(), dimensions.data());
+            if (name == PATH::XCOORDS)
+            {
+              mappingSize[0] = dimensions[0];
+            }
+            else if (name == PATH::YCOORDS)
+            {
+              mappingSize[0] = dimensions[1];
+            }
+            else if (name == PATH::ZCOORDS)
+            {
+              mappingSize[0] = dimensions[2];
+            }
             break;
           }
           default:
@@ -1574,6 +1677,10 @@ vtkHDF::ScopedH5GHandle vtkHDFWriter::Implementation::GetSubfileNonNullPart(
 vtkHDFWriter::Implementation::IndexingMode vtkHDFWriter::Implementation::GetDatasetIndexationMode(
   const std::string& path)
 {
+  if (PATH::ContainsAny(path, { PATH::NUMBER_OF_CELLS_PER_TREE_DEPTH }))
+  {
+    return IndexingMode::TreeDepths;
+  }
   if (PATH::ContainsAny(path, PATH::COUNT_VALUES) || PATH::ContainsAny(path, { PATH::FIELD_DATA }))
   {
     return IndexingMode::MetaData;
@@ -1582,13 +1689,25 @@ vtkHDFWriter::Implementation::IndexingMode vtkHDFWriter::Implementation::GetData
   {
     return IndexingMode::Points;
   }
-  if (PATH::ContainsAny(path, { PATH::CELL_DATA, PATH::OFFSETS, PATH::TYPES }))
+  if (PATH::ContainsAny(path, { PATH::CELL_DATA, PATH::OFFSETS, PATH::TYPES, PATH::MASK }))
   {
     return IndexingMode::Cells;
   }
   if (PATH::ContainsAny(path, { PATH::CONNECTIVITY }))
   {
     return IndexingMode::Connectivity;
+  }
+  if (PATH::ContainsAny(path, { PATH::TREE_IDS, PATH::DEPTH_PER_TREE }))
+  {
+    return IndexingMode::Trees;
+  }
+  if (PATH::ContainsAny(path, { PATH::DESCRIPTORS }))
+  {
+    return IndexingMode::Descriptor;
+  }
+  if (PATH::ContainsAny(path, { PATH::XCOORDS, PATH::YCOORDS, PATH::ZCOORDS }))
+  {
+    return IndexingMode::HTGCoords;
   }
 
   return IndexingMode::Undefined;

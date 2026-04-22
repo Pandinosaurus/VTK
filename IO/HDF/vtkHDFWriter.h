@@ -44,6 +44,7 @@ VTK_ABI_NAMESPACE_BEGIN
 class vtkCellArray;
 class vtkDataObjectTree;
 class vtkDataSet;
+class vtkHyperTreeGrid;
 class vtkPoints;
 class vtkPointSet;
 class vtkPolyData;
@@ -232,6 +233,7 @@ private:
    */
   bool WriteDatasetToFile(hid_t group, vtkPolyData* input, unsigned int partId = 0);
   bool WriteDatasetToFile(hid_t group, vtkUnstructuredGrid* input, unsigned int partId = 0);
+  bool WriteDatasetToFile(hid_t group, vtkHyperTreeGrid* input, unsigned int partId = 0);
   bool WriteDatasetToFile(hid_t group, vtkPartitionedDataSet* input);
   bool WriteDatasetToFile(hid_t group, vtkDataObjectTree* input);
   ///@}
@@ -243,6 +245,8 @@ private:
    */
   bool UpdateStepsGroup(hid_t group, vtkUnstructuredGrid* input, unsigned int partId);
   bool UpdateStepsGroup(hid_t group, vtkPolyData* input, unsigned int partId);
+  bool UpdateStepsGroup(hid_t group, vtkHyperTreeGrid* input, unsigned int partId,
+    vtkIdType numberOfCellsPerDepthSize, vtkIdType descriptorsSize, vtkIdType maskSize);
   ///@}
 
   ///@{
@@ -253,6 +257,7 @@ private:
   bool InitializeTemporalPolyData(hid_t group);
   bool InitializeTemporalUnstructuredGrid(hid_t group);
   bool InitializeTemporalPolyhedra(hid_t group);
+  bool InitializeTemporalHTG(hid_t group);
   ///@}
 
   ///@{
@@ -262,6 +267,7 @@ private:
    */
   bool InitializeChunkedDatasets(hid_t group, vtkUnstructuredGrid* input);
   bool InitializeChunkedDatasets(hid_t group, vtkPolyData* input);
+  bool InitializeChunkedDatasets(hid_t group, vtkHyperTreeGrid* input);
   bool InitializePointDatasets(hid_t group, vtkPoints* input);
   bool InitializePrimitiveDataset(hid_t group);
   bool InitializePolyhedraDatasets(hid_t group);
@@ -361,9 +367,12 @@ private:
   /**
    * Add the data arrays of the object to the file
    * OpenRoot should succeed on this->Impl before calling this function
+   * cellIdMap is an IdList giving the cell ids in Breadth-first order, used to rearange the arrays
+   * before being written. Used exclusively for HTG for now.
    */
   bool AppendDataArrays(hid_t group, vtkDataObject* input, unsigned int partId = 0);
-  bool AppendDataSetAttributes(hid_t group, vtkDataObject* input, unsigned int partId = 0);
+  bool AppendDataSetAttributes(
+    hid_t group, vtkDataObject* input, unsigned int partId = 0, vtkIdList* cellIdMap = nullptr);
   bool AppendFieldDataArrays(hid_t group, vtkDataObject* input, unsigned int partId = 0);
   ///@}
 

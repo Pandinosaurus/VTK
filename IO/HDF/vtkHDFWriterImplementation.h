@@ -121,6 +121,13 @@ public:
   vtkHDF::ScopedH5AHandle CreateScalarAttribute(hid_t group, const char* name, int value);
 
   /**
+   * Create a vector integer attribute in the given group.
+   * Noop if the attribute already exists.
+   */
+  vtkHDF::ScopedH5AHandle CreateVectorAttribute(
+    hid_t group, const char* name, const std::vector<unsigned int>& values);
+
+  /**
    * Create a string attribute in the given group.
    * Noop if the attribute already exists.
    */
@@ -372,6 +379,10 @@ private:
     Points,
     Cells,
     Connectivity,
+    TreeDepths,
+    Trees,
+    Descriptor,
+    HTGCoords,
     MetaData,
     Undefined
   };
