@@ -147,6 +147,18 @@ int vtkCommunicator::Send(vtkDataObject* data, int remoteHandle, int tag)
   // messages with the specific source and mangled tag, which are guaranteed to
   // be received in the correct order.
   static int tagMangler = 1000;
+  int tagMaxValue = this->GetTagMaxValue();
+  if (tagMaxValue < 0)
+  {
+    vtkWarningMacro(<< "Tag maximum value could not be recovered. Cannot send "
+                    << data->GetClassName());
+    return 0;
+  }
+  if ((tag + tagMangler) >= tagMaxValue)
+  {
+    // Reset the mangler to make sure it stays in the tag value range.
+    tagMangler = 1000;
+  }
   int mangledTag = tag + tagMangler++;
   int header[2];
   header[0] = this->LocalProcessId;
@@ -218,6 +230,18 @@ int vtkCommunicator::Send(vtkDataArray* data, int remoteHandle, int tag)
   // messages with the specific source and mangled tag, which are guaranteed to
   // be received in the correct order.
   static int tagMangler = 1000;
+  int tagMaxValue = this->GetTagMaxValue();
+  if (tagMaxValue < 0)
+  {
+    vtkWarningMacro(<< "Tag maximum value could not be recovered. Cannot send "
+                    << data->GetClassName());
+    return 0;
+  }
+  if ((tag + tagMangler) >= tagMaxValue)
+  {
+    // Reset the mangler to make sure it stays in the tag value range.
+    tagMangler = 1000;
+  }
   int mangledTag = tag + tagMangler++;
   int header[2];
   header[0] = this->LocalProcessId;
