@@ -85,8 +85,9 @@ bool vtkDeserializer::DeserializeJSON(
   const auto& state = this->Context->GetState(identifier);
   if (state.empty())
   {
-    vtkErrorMacro(<< "No state found at id=" << identifier);
-    return false;
+    // State could have been explicitly ignored
+    vtkDebugMacro(<< "No state found at id=" << identifier);
+    return true;
   }
   std::string className;
   std::vector<std::string> superClassNames;
