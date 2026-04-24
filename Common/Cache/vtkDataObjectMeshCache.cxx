@@ -626,18 +626,18 @@ void vtkDataObjectMeshCache::ForwardAttributes(
   auto outAttribute = output->GetAttributes(attribute);
   auto cacheAttribute = cache->GetAttributes(attribute);
 
+  if (this->PreserveAttributes)
+  {
+    vtkCacheLog(INFO, "ShallowCopy Attribute");
+    outAttribute->DeepCopy(inAttribute);
+    return;
+  }
+
   auto originalIds = cacheAttribute->GetArray(name.c_str());
   if (!originalIds)
   {
     vtkCacheLog(
       INFO, "Global Ids not found for " << vtkDataObject::GetAssociationTypeAsString(attribute));
-    return;
-  }
-
-  if (this->PreserveAttributes)
-  {
-    vtkCacheLog(INFO, "ShallowCopy Attribute");
-    outAttribute->DeepCopy(inAttribute);
     return;
   }
 
