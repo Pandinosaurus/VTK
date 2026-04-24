@@ -6,16 +6,16 @@
 
 #include "vtkFiltersTemporalModule.h" // Export macro
 
-#include "vtkAlgorithm.h" // for algorithm
 #include "vtkObject.h"
+#include "vtkSetGet.h"
 #include "vtkSmartPointer.h" // for smart pointer
 #include "vtkWeakPointer.h"  // for weak pointer
 
-#include <set>    // for set
 #include <string> // for string
 
 VTK_ABI_NAMESPACE_BEGIN
 
+class vtkAlgorithm;
 class vtkDataObject;
 class vtkDataSet;
 class vtkCompositeDataSet;
@@ -154,7 +154,7 @@ public:
    * The status is invalid if the Consumer is modified after the last CopyCacheToDataObject call.
    * Required before any call to CopyCacheToDataObject.
    */
-  vtkSetSmartPointerMacro(Consumer, vtkAlgorithm);
+  void SetConsumer(vtkAlgorithm* consumer);
 
   /**
    * Set the original dataobject.

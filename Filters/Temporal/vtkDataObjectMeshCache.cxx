@@ -4,6 +4,7 @@
 #include "vtkDataObjectMeshCache.h"
 
 #include "vtkAffineArray.h"
+#include "vtkAlgorithm.h"
 #include "vtkCellData.h"
 #include "vtkCompositeDataSet.h"
 #include "vtkDataArrayRange.h"
@@ -14,6 +15,7 @@
 #include "vtkIndexedArray.h"
 #include "vtkLogger.h"
 #include "vtkPointData.h"
+#include "vtkSetGet.h"
 
 VTK_ABI_NAMESPACE_BEGIN
 vtkStandardNewMacro(vtkDataObjectMeshCache);
@@ -677,6 +679,12 @@ void vtkDataObjectMeshCache::ClearAttributes(vtkDataObject* dataobject)
 {
   ClearAttributesWorker clearWorker;
   clearWorker.Compute(dataobject);
+}
+
+//------------------------------------------------------------------------------
+void vtkDataObjectMeshCache::SetConsumer(vtkAlgorithm* consumer)
+{
+  vtkSetSmartPointerBodyMacro(Consumer, vtkAlgorithm, consumer);
 }
 
 //------------------------------------------------------------------------------
