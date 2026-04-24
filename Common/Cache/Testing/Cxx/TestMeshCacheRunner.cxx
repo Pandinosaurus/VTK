@@ -1,12 +1,16 @@
 // SPDX-FileCopyrightText: Copyright (c) Ken Martin, Will Schroeder, Bill Lorensen
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "MeshCacheMockAlgorithms.h"
-
+#include "vtkAlgorithm.h"
+#include "vtkCellArray.h"
+#include "vtkCellData.h"
 #include "vtkDataObjectMeshCache.h"
+#include "vtkDoubleArray.h"
 #include "vtkLogger.h"
 #include "vtkMeshCacheRunner.h"
 #include "vtkNew.h"
+#include "vtkPointData.h"
+#include "vtkPoints.h"
 #include "vtkPolyData.h"
 #include "vtkTestUtilities.h"
 
@@ -58,7 +62,7 @@ bool SecondStepAutomaticUpdate(
       vtkLog(ERROR, "Output should still be empty");
       return false;
     }
-    // cache will be init from output: be sure it is not empty.
+    // cache will be init from output: fill it like a passthrough filter
     output->ShallowCopy(input);
   }
   auto status = cache->GetStatus();
@@ -94,35 +98,60 @@ bool ThirdStepInitOutput(vtkDataObjectMeshCache* cache, vtkPolyData* input, vtkP
 
   return true;
 }
+
+vtkSmartPointer<vtkPolyData> CreateData()
+{
+  vtkNew<vtkPolyData> mesh;
+  vtkNew<vtkPoints> points;
+  vtkNew<vtkCellArray> lines;
+  mesh->SetPoints(points);
+  mesh->SetLines(lines);
+  vtkNew<vtkDoubleArray> pointArray;
+  pointArray->SetName("point_array");
+  vtkNew<vtkDoubleArray> cellArray;
+  cellArray->SetName("cell_array");
+  mesh->GetPointData()->AddArray(pointArray);
+  mesh->GetCellData()->AddArray(cellArray);
+  const int nbOfElements = 5;
+  for (int i = 0; i < nbOfElements; i++)
+  {
+    points->InsertNextPoint(i, 0, 0);
+    // line with next point. Last cell goes from last point to first.
+    lines->InsertNextCell({ i, (i + 1) % nbOfElements });
+    pointArray->InsertNextValue(i);
+    cellArray->InsertNextValue(i);
+  }
+
+  return mesh;
+}
 }
 
 int TestMeshCacheRunner(int vtkNotUsed(argc), char* vtkNotUsed(argv)[])
 {
   vtkNew<vtkDataObjectMeshCache> cache;
-  vtkNew<vtkStaticDataSource> source;
-  vtkNew<vtkConsumerDataFilter> passThroughFilter;
-  passThroughFilter->SetInputConnection(source->GetOutputPort());
-  passThroughFilter->Update();
+  vtkNew<vtkAlgorithm> consumer;
+  cache->SetConsumer(consumer);
 
-  auto data = passThroughFilter->GetPolyDataOutput();
-  vtkNew<vtkPolyData> output;
-
-  cache->SetConsumer(passThroughFilter);
-  cache->SetOriginalDataObject(data);
+  auto mesh = ::CreateData();
+  cache->SetOriginalDataObject(mesh);
   cache->PreserveAttributesOn();
   cache->ForwardAttribute(vtkDataObject::POINT);
+  cache->ForwardAttribute(vtkDataObject::CELL);
 
-  if (!::FirstStepNoUpdate(cache, data, output))
+  vtkNew<vtkPolyData> output;
+  if (!::FirstStepNoUpdate(cache, mesh, output))
   {
     return EXIT_FAILURE;
   }
 
-  if (!::SecondStepAutomaticUpdate(cache, data, output))
+  output->Initialize();
+  if (!::SecondStepAutomaticUpdate(cache, mesh, output))
   {
     return EXIT_FAILURE;
   }
 
-  if (!::ThirdStepInitOutput(cache, data, output))
+  output->Initialize();
+  if (!::ThirdStepInitOutput(cache, mesh, output))
   {
     return EXIT_FAILURE;
   }

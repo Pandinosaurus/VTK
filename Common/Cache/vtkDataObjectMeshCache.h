@@ -4,10 +4,10 @@
 #ifndef vtkDataObjectMeshCache_h
 #define vtkDataObjectMeshCache_h
 
-#include "vtkFiltersTemporalModule.h" // Export macro
+#include "vtkCommonCacheModule.h" // Export macro
 
 #include "vtkObject.h"
-#include "vtkSetGet.h"
+#include "vtkSetGet.h"       // for Set/Get macros
 #include "vtkSmartPointer.h" // for smart pointer
 #include "vtkWeakPointer.h"  // for weak pointer
 
@@ -69,7 +69,7 @@ class vtkCompositeDataSet;
  * be explicitly handled, so each RequestData can actually be interpreted as
  * a new input data to process.
  */
-class VTKFILTERSTEMPORAL_EXPORT vtkDataObjectMeshCache : public vtkObject
+class VTKCOMMONCACHE_EXPORT vtkDataObjectMeshCache : public vtkObject
 {
 public:
   static vtkDataObjectMeshCache* New();

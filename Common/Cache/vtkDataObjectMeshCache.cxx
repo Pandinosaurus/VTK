@@ -529,12 +529,7 @@ void vtkDataObjectMeshCache::CopyCacheToDataObject(vtkDataObject* output)
     return;
   }
   vtkSmartPointer<vtkDataObject> input = nullptr;
-  if (this->HasConsumerNoInputPort())
-  {
-    input = vtkSmartPointer<vtkDataObject>::Take(output->NewInstance());
-    input->ShallowCopy(output);
-  }
-  else if (this->OriginalDataSet)
+  if (this->OriginalDataSet)
   {
     input = this->OriginalDataSet.Get();
   }
@@ -690,7 +685,7 @@ void vtkDataObjectMeshCache::SetConsumer(vtkAlgorithm* consumer)
 //------------------------------------------------------------------------------
 bool vtkDataObjectMeshCache::HasConsumerNoInputPort() const
 {
-  return this->Consumer->GetNumberOfInputPorts() == 0;
+  return false;
 }
 
 //------------------------------------------------------------------------------
