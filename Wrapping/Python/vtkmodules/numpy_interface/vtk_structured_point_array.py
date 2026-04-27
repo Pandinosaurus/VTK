@@ -257,6 +257,8 @@ class VTKStructuredPointArray(VTKDataArrayMixin):
 
     def _get_dims(self):
         """Get grid dimensions from axis arrays."""
+        if self.GetNumberOfTuples() == 0:
+            return (0, 0, 0)
         axes = self._get_axis_arrays()
         if axes is not None:
             return tuple(len(a) for a in axes)
@@ -284,6 +286,8 @@ class VTKStructuredPointArray(VTKDataArrayMixin):
         materializes via meshgrid (efficient).  Otherwise, uses DeepCopy
         to an AOS array.
         """
+        if self.GetNumberOfTuples() == 0:
+            return numpy.empty((0, 3), dtype=dtype or self.dtype)
         axes = self._get_axis_arrays()
         if axes is not None and not self._uses_dir_matrix():
             X, Y, Z = axes
