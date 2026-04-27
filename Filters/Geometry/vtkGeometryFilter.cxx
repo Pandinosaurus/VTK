@@ -111,6 +111,35 @@ vtkGeometryFilter::~vtkGeometryFilter()
 }
 
 //------------------------------------------------------------------------------
+vtkGeometryFilterHelper* vtkGeometryFilter::GetCachedUnstructuredInfo(
+  vtkUnstructuredGridBase* uGrid)
+{
+  // Reuse a previously-computed characterization when the input's cell
+  // array has not changed. CharacterizeUnstructuredGrid is a parallel
+  // O(ncells) scan whose result depends only on the cell array, so we
+  // cache it keyed on that array's MTime. Falls back to recomputing if
+  // we can't get a stable MTime (e.g. non-vtkUnstructuredGrid base).
+  vtkUnstructuredGrid* uG = vtkUnstructuredGrid::SafeDownCast(uGrid);
+  vtkCellArray* cells = uG ? uG->GetCells() : nullptr;
+  if (!cells)
+  {
+    delete this->CachedUnstructuredInfo;
+    this->CachedUnstructuredInfo = vtkGeometryFilterHelper::CharacterizeUnstructuredGrid(uGrid);
+    this->CachedUnstructuredInfoMTime = 0;
+    return this->CachedUnstructuredInfo;
+  }
+  vtkMTimeType cellsMTime = cells->GetMTime();
+  if (this->CachedUnstructuredInfo && this->CachedUnstructuredInfoMTime == cellsMTime)
+  {
+    return this->CachedUnstructuredInfo;
+  }
+  delete this->CachedUnstructuredInfo;
+  this->CachedUnstructuredInfo = vtkGeometryFilterHelper::CharacterizeUnstructuredGrid(uGrid);
+  this->CachedUnstructuredInfoMTime = cellsMTime;
+  return this->CachedUnstructuredInfo;
+}
+
+//------------------------------------------------------------------------------
 // Specify a (xmin,xmax, ymin,ymax, zmin,zmax) bounding box to clip data.
 void vtkGeometryFilter::SetExtent(
   double xMin, double xMax, double yMin, double yMax, double zMin, double zMax)
@@ -2929,8 +2958,10 @@ int ExecuteUnstructuredGrid(vtkGeometryFilter* self, vtkDataSet* dataSetInput, v
   bool info_owned = false;
   if (info == nullptr)
   {
-    info = vtkGeometryFilterHelper::CharacterizeUnstructuredGrid(uGridBase);
-    info_owned = true;
+    // Use the filter's cached characterization when possible. The cache
+    // keys on the input cell-array MTime; static topology hits the cache
+    // and avoids the parallel O(ncells) scan on every update.
+    info = self->GetCachedUnstructuredInfo(uGridBase);
   }
 
   // Nonlinear cells are handled by vtkDataSetSurfaceFilter
@@ -2940,7 +2971,10 @@ int ExecuteUnstructuredGrid(vtkGeometryFilter* self, vtkDataSet* dataSetInput, v
     vtkNew<vtkDataSetSurfaceFilter> dssf;
     vtkGeometryFilterHelper::CopyFilterParams(self, dssf.Get());
     dssf->UnstructuredGridExecute(dataSetInput, output, info);
-    delete info;
+    if (info_owned)
+    {
+      delete info;
+    }
     return 1;
   }
   // if it's an unstructured grid base and not an unstructured grid
@@ -3222,27 +3256,6 @@ int vtkGeometryFilter::UnstructuredGridExecute(vtkDataSet* dataSetInput, vtkPoly
   vtkGeometryFilterHelper* info, vtkPolyData* excludedFaces)
 {
   const auto uGrid = vtkUnstructuredGrid::SafeDownCast(dataSetInput);
-
-  // Reuse a previously-computed characterization when the input's cell
-  // array hasn't changed. CharacterizeUnstructuredGrid is a parallel
-  // O(ncells) scan over all cell types, which is pure waste for static
-  // topology — the scan's result depends only on the cell array, so we
-  // cache it keyed on that array's MTime.
-  if (info == nullptr && uGrid != nullptr && uGrid->GetCells() != nullptr)
-  {
-    vtkMTimeType cellsMTime = uGrid->GetCells()->GetMTime();
-    if (this->CachedUnstructuredInfo && this->CachedUnstructuredInfoMTime == cellsMTime)
-    {
-      info = this->CachedUnstructuredInfo;
-    }
-    else
-    {
-      info = vtkGeometryFilterHelper::CharacterizeUnstructuredGrid(uGrid);
-      delete this->CachedUnstructuredInfo;
-      this->CachedUnstructuredInfo = info;
-      this->CachedUnstructuredInfoMTime = cellsMTime;
-    }
-  }
 
 #ifdef VTK_USE_64BIT_IDS
   bool use64BitsIds = (dataSetInput->GetNumberOfPoints() > VTK_TYPE_INT32_MAX ||

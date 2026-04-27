@@ -405,6 +405,14 @@ public:
   virtual int DataSetExecute(vtkDataSet* input, vtkPolyData* output);
   ///@}
 
+  /**
+   * Return a characterization of the input unstructured grid, reusing a
+   * previously-computed result when the input's cell-array MTime has not
+   * changed. The returned pointer is owned by this filter and must NOT be
+   * deleted by the caller. Intended for internal use by the filter itself.
+   */
+  vtkGeometryFilterHelper* GetCachedUnstructuredInfo(vtkUnstructuredGridBase* uGrid);
+
 protected:
   vtkGeometryFilter();
   ~vtkGeometryFilter() override;
