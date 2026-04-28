@@ -1356,6 +1356,14 @@ protected:
   int ReceiveElementalDataObject(vtkDataObject* data, int remoteHandle, int tag);
   int ReceiveMultiBlockDataSet(vtkMultiBlockDataSet* data, int remoteHandle, int tag);
 
+  /**
+   * Return the maximum value that the tag can take for tag sending and receive.
+   * The default value is VTK_INT_MAX.
+   * This method can be overriden to return a vendor specific value and may return -1 in case of
+   * failure recovering the value.
+   */
+  virtual int GetTagMaxValue() const { return VTK_INT_MAX; }
+
   int MaximumNumberOfProcesses;
   int NumberOfProcesses;
 
