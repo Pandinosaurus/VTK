@@ -4,18 +4,18 @@
 #ifndef vtkDataObjectMeshCache_h
 #define vtkDataObjectMeshCache_h
 
-#include "vtkFiltersTemporalModule.h" // Export macro
+#include "vtkCommonCacheModule.h" // Export macro
 
-#include "vtkAlgorithm.h" // for algorithm
 #include "vtkObject.h"
+#include "vtkSetGet.h"       // for Set/Get macros
 #include "vtkSmartPointer.h" // for smart pointer
 #include "vtkWeakPointer.h"  // for weak pointer
 
-#include <set>    // for set
 #include <string> // for string
 
 VTK_ABI_NAMESPACE_BEGIN
 
+class vtkAlgorithm;
 class vtkDataObject;
 class vtkDataSet;
 class vtkCompositeDataSet;
@@ -69,7 +69,7 @@ class vtkCompositeDataSet;
  * be explicitly handled, so each RequestData can actually be interpreted as
  * a new input data to process.
  */
-class VTKFILTERSTEMPORAL_EXPORT vtkDataObjectMeshCache : public vtkObject
+class VTKCOMMONCACHE_EXPORT vtkDataObjectMeshCache : public vtkObject
 {
 public:
   static vtkDataObjectMeshCache* New();
@@ -154,7 +154,7 @@ public:
    * The status is invalid if the Consumer is modified after the last CopyCacheToDataObject call.
    * Required before any call to CopyCacheToDataObject.
    */
-  vtkSetSmartPointerMacro(Consumer, vtkAlgorithm);
+  void SetConsumer(vtkAlgorithm* consumer);
 
   /**
    * Set the original dataobject.

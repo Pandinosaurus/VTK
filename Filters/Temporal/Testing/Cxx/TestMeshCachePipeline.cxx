@@ -496,7 +496,7 @@ bool TestUnsupportedCalls(TestPipelineInterface* pipeline)
 }
 
 //------------------------------------------------------------------------------
-int TestDataObjectMeshCache(int vtkNotUsed(argc), char* vtkNotUsed(argv)[])
+int TestMeshCachePipeline(int vtkNotUsed(argc), char* vtkNotUsed(argv)[])
 {
   vtkLog(INFO, "Test default cache");
   bool success = TestDefault();

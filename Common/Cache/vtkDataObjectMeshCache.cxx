@@ -4,6 +4,7 @@
 #include "vtkDataObjectMeshCache.h"
 
 #include "vtkAffineArray.h"
+#include "vtkAlgorithm.h"
 #include "vtkCellData.h"
 #include "vtkCompositeDataSet.h"
 #include "vtkDataArrayRange.h"
@@ -14,6 +15,7 @@
 #include "vtkIndexedArray.h"
 #include "vtkLogger.h"
 #include "vtkPointData.h"
+#include "vtkSetGet.h"
 
 VTK_ABI_NAMESPACE_BEGIN
 vtkStandardNewMacro(vtkDataObjectMeshCache);
@@ -527,12 +529,7 @@ void vtkDataObjectMeshCache::CopyCacheToDataObject(vtkDataObject* output)
     return;
   }
   vtkSmartPointer<vtkDataObject> input = nullptr;
-  if (this->HasConsumerNoInputPort())
-  {
-    input = vtkSmartPointer<vtkDataObject>::Take(output->NewInstance());
-    input->ShallowCopy(output);
-  }
-  else if (this->OriginalDataSet)
+  if (this->OriginalDataSet)
   {
     input = this->OriginalDataSet.Get();
   }
@@ -629,18 +626,18 @@ void vtkDataObjectMeshCache::ForwardAttributes(
   auto outAttribute = output->GetAttributes(attribute);
   auto cacheAttribute = cache->GetAttributes(attribute);
 
+  if (this->PreserveAttributes)
+  {
+    vtkCacheLog(INFO, "ShallowCopy Attribute");
+    outAttribute->DeepCopy(inAttribute);
+    return;
+  }
+
   auto originalIds = cacheAttribute->GetArray(name.c_str());
   if (!originalIds)
   {
     vtkCacheLog(
       INFO, "Global Ids not found for " << vtkDataObject::GetAssociationTypeAsString(attribute));
-    return;
-  }
-
-  if (this->PreserveAttributes)
-  {
-    vtkCacheLog(INFO, "ShallowCopy Attribute");
-    outAttribute->DeepCopy(inAttribute);
     return;
   }
 
@@ -680,9 +677,15 @@ void vtkDataObjectMeshCache::ClearAttributes(vtkDataObject* dataobject)
 }
 
 //------------------------------------------------------------------------------
+void vtkDataObjectMeshCache::SetConsumer(vtkAlgorithm* consumer)
+{
+  vtkSetSmartPointerBodyMacro(Consumer, vtkAlgorithm, consumer);
+}
+
+//------------------------------------------------------------------------------
 bool vtkDataObjectMeshCache::HasConsumerNoInputPort() const
 {
-  return this->Consumer->GetNumberOfInputPorts() == 0;
+  return false;
 }
 
 //------------------------------------------------------------------------------

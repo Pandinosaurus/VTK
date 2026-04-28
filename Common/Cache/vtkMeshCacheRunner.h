@@ -14,13 +14,13 @@
 #ifndef vtkMeshCacheRunner_h
 #define vtkMeshCacheRunner_h
 
-#include "vtkFiltersTemporalModule.h" // Export macro
+#include "vtkCommonCacheModule.h" // Export macro
 
 VTK_ABI_NAMESPACE_BEGIN
 class vtkDataObject;
 class vtkDataObjectMeshCache;
 
-class VTKFILTERSTEMPORAL_EXPORT vtkMeshCacheRunner
+class VTKCOMMONCACHE_EXPORT vtkMeshCacheRunner
 {
 public:
   /**

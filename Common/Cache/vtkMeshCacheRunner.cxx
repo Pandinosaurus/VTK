@@ -35,7 +35,7 @@ vtkMeshCacheRunner::vtkMeshCacheRunner(
 //------------------------------------------------------------------------------
 void vtkMeshCacheRunner::UpdateCache()
 {
-  if (!this->CacheLoaded)
+  if (!this->CacheLoaded && this->MeshCache->IsSupportedData(this->Output))
   {
     this->MeshCache->UpdateCache(this->Output);
   }

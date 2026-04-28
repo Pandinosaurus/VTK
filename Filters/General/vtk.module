@@ -27,15 +27,16 @@ DEPENDS
   VTK::CommonMisc
   VTK::FiltersCore
 PRIVATE_DEPENDS
+  VTK::CommonCache
   VTK::CommonComputationalGeometry
   VTK::CommonMath
   VTK::CommonSystem
   VTK::CommonTransforms
   VTK::FiltersGeometry
-  VTK::FiltersTemporal
   VTK::FiltersVerdict
   VTK::fmt
 TEST_DEPENDS
+  VTK::CommonCache
   VTK::CommonColor
   VTK::FiltersAMR
   VTK::FiltersExtraction
@@ -44,7 +45,6 @@ TEST_DEPENDS
   VTK::FiltersHybrid
   VTK::FiltersModeling
   VTK::FiltersSources
-  VTK::FiltersTemporal
   VTK::IOExodus
   VTK::IOGeometry
   VTK::IOHDF
