@@ -438,9 +438,13 @@ public:
    * are measured in pixels.
    * The other information is about key board input.
    */
+  VTK_MARSHALEXCLUDE(VTK_MARSHAL_EXCLUDE_REASON_IS_INTERNAL)
   vtkGetVector2Macro(EventPosition, int);
+  VTK_MARSHALEXCLUDE(VTK_MARSHAL_EXCLUDE_REASON_IS_INTERNAL)
   vtkGetVector2Macro(LastEventPosition, int);
+  VTK_MARSHALEXCLUDE(VTK_MARSHAL_EXCLUDE_REASON_IS_INTERNAL)
   vtkSetVector2Macro(LastEventPosition, int);
+  VTK_MARSHALEXCLUDE(VTK_MARSHAL_EXCLUDE_REASON_IS_INTERNAL)
   virtual void SetEventPosition(int x, int y)
   {
     vtkDebugMacro(<< this->GetClassName() << " (" << this << "): setting EventPosition to (" << x
@@ -455,6 +459,7 @@ public:
       this->Modified();
     }
   }
+  VTK_MARSHALEXCLUDE(VTK_MARSHAL_EXCLUDE_REASON_IS_INTERNAL)
   virtual void SetEventPosition(int pos[2]) { this->SetEventPosition(pos[0], pos[1]); }
   virtual void SetEventPositionFlipY(int x, int y)
   {
