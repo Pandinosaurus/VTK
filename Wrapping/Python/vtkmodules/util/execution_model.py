@@ -124,7 +124,7 @@ class select_ports(object):
         This is to handle sequence >> select_ports where the port can
         accept multiple connections."""
         from collections.abc import Sequence
-        if lhs is None or (isinstance(lhs, Sequence) and len(lhs == 0)):
+        if lhs is None or (isinstance(lhs, Sequence) and len(lhs) == 0):
             self.algorithm.RemoveAllInputConnections(self.input_port)
             return self
         return Pipeline(lhs, self)
