@@ -24,7 +24,7 @@ vtk_module_third_party(
     STANDARD_INCLUDE_DIRS
   EXTERNAL
     PACKAGE Viskores
-    TARGETS viskores::cont viskores::cont_testing viskores::filter viskores::worklet
+    TARGETS viskores::cont viskores::cont_testing viskores::filter
     VERSION       "1.1.0"
     STANDARD_INCLUDE_DIRS)
 
@@ -55,3 +55,19 @@ foreach (viskores_target IN LISTS viskores_specific_targets)
   _vtk_module_install("vtkviskores_${viskores_target}")
   add_library("VTK::vtkviskores_${viskores_target}" ALIAS "vtkviskores_${viskores_target}")
 endforeach ()
+
+# If a VTK library contains Viskores worklets or other Viskores device code, the files must be
+# declared as the proper language and the library must link to VTK::vtkviskores_worklet. This
+# function sets this up. Use this function by giving it the name of a target.
+function(vtk_add_viskores_device_target_information target)
+  target_link_libraries(${target} PRIVATE VTK::vtkviskores_worklet)
+  get_target_property(sources ${target} SOURCES)
+  list(FILTER sources INCLUDE REGEX "\\.(cpp|cxx|cc|C)$")
+  if(TARGET VTK::vtkviskores_cuda OR TARGET VTK::vtkviskores_kokkos_cuda)
+    set_source_files_properties(${sources} PROPERTIES LANGUAGE CUDA)
+  endif()
+  if(TARGET VTK::vtkviskores_kokkos_hip)
+    set_source_files_properties(${sources} PROPERTIES LANGUAGE HIP)
+    kokkos_compilation(SOURCE ${sources})
+  endif()
+endfunction()
